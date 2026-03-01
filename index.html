@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VS Code Online</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#007acc">
+</head>
+
+<body>
+
+<div class="titlebar">
+  <div class="menubar">
+    <div class="menu-item mobile-btn" onclick="toggleSidebar()">☰</div>
+
+    <div class="menu-item" id="file-menu-container" onclick="toggleMenu(event, 'file-menu')">File
+      <div class="dropdown" id="file-menu">
+        <div class="dropdown-item" onclick="createFile()">New File <span>Ctrl+N</span></div>
+        <div class="dropdown-item" onclick="openFolder()">Open Folder... <span>Ctrl+K</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="triggerManualSave()">Save <span>Ctrl+S</span></div>
+      </div>
+    </div>
+    <div class="menu-item" id="run-menu-container" onclick="toggleMenu(event, 'run-menu')">Run
+      <div class="dropdown" id="run-menu">
+        <div class="dropdown-item" onclick="runCode()">Run JS Code <span>F5</span></div>
+      </div>
+    </div>
+    <div class="menu-item" id="view-menu-container" onclick="toggleMenu(event, 'view-menu')">View
+      <div class="dropdown" id="view-menu">
+        <div class="dropdown-item" onclick="previewHTML()">Live Preview HTML <span>🌐</span></div>
+      </div>
+    </div>
+    
+    <div class="menu-item" onclick="toggleSplit()">◫ Split Editor</div>
+  </div>
+  
+  <div class="titlebar-center">
+    <div class="search-bar">🔍 workspace</div>
+  </div>
+</div>
+
+<div class="app">
+  <div class="activity-bar">
+    <div class="activity-icon active" title="Explorer">📄</div>
+    <div class="activity-icon" title="Search">🔍</div>
+    <div class="activity-icon" title="Source Control">🌿</div>
+    <div class="activity-icon" style="margin-top: auto; margin-bottom: 10px;" title="Settings">⚙️</div>
+  </div>
+
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">EXPLORER</div>
+    <div id="fileTree">
+      <button class="open-folder-btn" onclick="openFolder()">Open Folder</button>
+    </div>
+  </div>
+
+  <div class="app-main">
+    <div id="tabs"></div>
+    
+   <div class="editor-layout">
+      <div id="editor1" class="editor-pane active-pane"></div>
+      <div id="editor2" class="editor-pane" style="display: none;"></div>
+      
+      <div id="preview-pane" class="editor-pane" style="display: none; flex-direction: column; background: #ffffff;">
+        <div class="preview-header">
+          <span>🌐 Live Preview</span>
+          <span class="close-preview" onclick="closePreview()">✖</span>
+        </div>
+        <iframe id="live-iframe" sandbox="allow-scripts"></iframe>
+      </div>
+    </div>
+    
+    <div id="terminal-container">
+      <div id="terminal-tabs">
+        <span class="term-tab">TERMINAL</span>
+        <span class="term-tab inactive-tab">OUTPUT</span>
+      </div>
+      <div id="terminal-history"></div>
+      <div id="terminal-input-line">
+        <span>C:\workspace&gt;</span> 
+        <input type="text" id="terminal-input" autocomplete="off" spellcheck="false" />
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="status-left">
+    <span class="status-item status-blue">>&lt;</span>
+    <span class="status-item">main*</span>
+    <span class="status-item">⊗ 0 ⚠ 0</span>
+  </div>
+  <div class="status-right">
+    <span class="status-item" id="cursor-position">Ln 1, Col 1</span>
+    <span class="status-item" id="status-lang">JavaScript</span>
+    <span class="status-item">UTF-8</span>
+    <span class="status-item" style="cursor: pointer;" onclick="formatCode()">Prettier</span>
+  </div>
+</div>
+
+<div id="context-menu" class="context-menu">
+  <div class="dropdown-item" onclick="renameContextItem()">Rename</div>
+  <div class="dropdown-item" onclick="deleteContextItem()" style="color: #f48771;">Delete</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/umd.js"></script>
+
+<script src="https://unpkg.com/prettier@3.2.5/standalone.js"></script>
+<script src="https://unpkg.com/prettier@3.2.5/plugins/estree.js"></script>
+<script src="https://unpkg.com/prettier@3.2.5/plugins/babel.js"></script>
+<script src="https://unpkg.com/prettier@3.2.5/plugins/html.js"></script>
+<script src="https://unpkg.com/prettier@3.2.5/plugins/postcss.js"></script>
+
+<script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
