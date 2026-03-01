@@ -136,9 +136,8 @@ require(["vs/editor/editor.main"], function () {
   editor2 = monaco.editor.create(document.getElementById("editor2"), { value: "// Editor 2", ...commonConfig });
 
   // NEW: Shift + Alt + F to Format
-  editor1.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, formatCode);
-  editor2.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, formatCode);
-  
+  editor1.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => window.formatCode());
+  editor2.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => window.formatCode());
   activeEditor = editor1;
 
   editor1.onDidFocusEditorText(() => { activeEditor = editor1; });
@@ -252,32 +251,46 @@ async function loadFolder(folderHandle, container, pathPrefix) {
 
 /* OPEN FILE */
 async function openFile(fullPath, handle) {
-  if (openFiles[fullPath]) { switchTab(fullPath); return; }
-  
-  const currentFile = activeEditor === editor1 ? currentFile1 : currentFile2;
-  if (currentFile) {
-    clearTimeout(saveTimeout);
-    await saveFile(currentFile, activeEditor.getValue());
-  }
+  try {
+    // Check if Monaco Editor actually loaded
+    if (!activeEditor) {
+      printToTerminal("Error: Code editor failed to load. Are you using a local server?", "#f48771");
+      return;
+    }
 
-  const file = await handle.getFile();
-  const text = await file.text();
-  
-  openFiles[fullPath] = { handle, content:text, unsaved: false };
-  
-  if (activeEditor === editor1) currentFile1 = fullPath;
-  else currentFile2 = fullPath;
-  
-  isProgrammaticEdit = true; 
-  activeEditor.setValue(text);
-  isProgrammaticEdit = false; 
-  
-  const lang = getLanguageForFile(fullPath);
-  monaco.editor.setModelLanguage(activeEditor.getModel(), lang);
-  document.getElementById("status-lang").innerText = lang.charAt(0).toUpperCase() + lang.slice(1);
-  renderTabs();
-  
-  if(window.innerWidth <= 768) toggleSidebar();
+    if (openFiles[fullPath]) { switchTab(fullPath); return; }
+    
+    const currentFile = activeEditor === editor1 ? currentFile1 : currentFile2;
+    if (currentFile) {
+      clearTimeout(saveTimeout);
+      await saveFile(currentFile, activeEditor.getValue());
+    }
+
+    const file = await handle.getFile();
+    const text = await file.text();
+    
+    openFiles[fullPath] = { handle, content:text, unsaved: false };
+    
+    if (activeEditor === editor1) currentFile1 = fullPath;
+    else currentFile2 = fullPath;
+    
+    isProgrammaticEdit = true; 
+    activeEditor.setValue(text);
+    isProgrammaticEdit = false; 
+    
+    const lang = getLanguageForFile(fullPath);
+    monaco.editor.setModelLanguage(activeEditor.getModel(), lang);
+    document.getElementById("status-lang").innerText = lang.charAt(0).toUpperCase() + lang.slice(1);
+    renderTabs();
+    
+    if(window.innerWidth <= 768) toggleSidebar();
+    
+    printToTerminal(`> Opened: ${fullPath}`, "#858585"); 
+    
+  } catch (err) {
+    printToTerminal(`[Error] Could not open file: ${err.message}`, "#f48771");
+    console.error(err);
+  }
 }
 
 /* CREATE FILE */
@@ -321,38 +334,115 @@ term.open(document.getElementById('terminal-output'));
 fitAddon.fit();
 
 // 4. Write the welcome message
-term.write('\x1b[1;34mChromebook IDE\x1b[0m v1.0.0\r\n');
 term.write('$ ');
 
-// 5. Handle user typing (The "Fake" Backend)
+// 5. Handle user typing inside xterm
 let currentLine = "";
-term.onData(e => {
-  if (e === '\r') { 
-    // User pressed ENTER
+let cmdHistory = [];
+let historyIndex = -1;
+
+term.onData(async e => {
+  if (e === '\r') { // User pressed ENTER
     term.write('\r\n');
+    const cmd = currentLine.trim();
     
-    // Check what they typed!
-    if (currentLine.trim() === "clear") {
-      term.clear();
-    } else if (currentLine.trim() !== "") {
-      term.write(`Command not found: ${currentLine}\r\n`);
+    if (cmd) {
+      cmdHistory.push(cmd);
+      historyIndex = cmdHistory.length;
+      
+      const args = cmd.split(" ");
+      const commandLower = args[0].toLowerCase();
+
+      // Command Logic
+      if (commandLower === "clear" || commandLower === "cls") {
+        term.clear();
+      } 
+      else if (commandLower === "help") {
+        printToTerminal("Available commands:", "#569cd6");
+        printToTerminal("  clear / cls       : Clears the terminal screen");
+        printToTerminal("  npm install <pkg> : Simulates installing a package");
+        printToTerminal("  touch <filename>  : Creates a new file");
+        printToTerminal("  [JS Code]         : Evaluates any valid JavaScript");
+      }
+      else if (commandLower === "npm" && (args[1] === "install" || args[1] === "i") && args[2]) {
+        const pkgName = args[2];
+        printToTerminal(`npm notice Fetching ${pkgName}...`);
+        await sleep(600);
+        printToTerminal(`[..................] - fetchMetadata: sill resolveWithNewModule ${pkgName}@latest`, "#569cd6");
+        await sleep(800);
+        printToTerminal(`\nadded 1 package in 2s`, "#89d185");
+      }
+      // NEW: touch command
+      else if (commandLower === "touch" && args[1]) {
+        if (!projectFolder) {
+          printToTerminal("Error: Please open a folder first.", "#f48771");
+        } else {
+          const fileName = args[1];
+          try {
+            const fileHandle = await projectFolder.getFileHandle(fileName, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write("");
+            await writable.close();
+            
+            await loadFolder(projectFolder, document.getElementById("tree-root"), "");
+            printToTerminal(`Created file: ${fileName}`, "#89d185");
+            openFile(fileName, fileHandle); // Automatically open it in the editor
+          } catch (err) {
+            printToTerminal(`Error creating file: ${err.message}`, "#f48771");
+          }
+        }
+      }
+      else {
+        // Try to evaluate as JS, otherwise say command not found
+        try {
+          let result = eval(cmd);
+          if (result !== undefined) printToTerminal(String(result), "#89d185");
+        } catch(err) {
+           if (err instanceof ReferenceError || err instanceof SyntaxError) {
+             printToTerminal(`Command not found: ${commandLower}`, "#f48771");
+           } else {
+             printToTerminal(`Error: ${err.message}`, "#f48771");
+           }
+        }
+      }
     }
     
     // Reset for the next line
-    term.write('$ ');
+    term.write('\r\nC:\\workspace> ');
     currentLine = "";
-  } else if (e === '\x7F') { 
-    // User pressed BACKSPACE
+    
+  } else if (e === '\x7F') { // User pressed BACKSPACE
     if (currentLine.length > 0) {
       currentLine = currentLine.substring(0, currentLine.length - 1);
-      term.write('\b \b'); // Erase character from screen
+      term.write('\b \b'); // Erase character from screen visually
     }
-  } else {
-    // Regular typing
-    currentLine += e;
-    term.write(e);
+  } else if (e === '\x1b[A') { // UP ARROW (History)
+    if (cmdHistory.length > 0 && historyIndex > 0) {
+      historyIndex--;
+      currentLine = cmdHistory[historyIndex];
+      term.write('\x1b[2K\rC:\\workspace> ' + currentLine);
+    }
+  } else if (e === '\x1b[B') { // DOWN ARROW (History)
+    if (historyIndex < cmdHistory.length - 1) {
+      historyIndex++;
+      currentLine = cmdHistory[historyIndex];
+      term.write('\x1b[2K\rC:\\workspace> ' + currentLine);
+    } else if (historyIndex === cmdHistory.length - 1) {
+      historyIndex++;
+      currentLine = "";
+      term.write('\x1b[2K\rC:\\workspace> ');
+    }
+  } else { // Regular typing
+    // Ignore Right/Left arrow keys for now
+    if (e !== '\x1b[C' && e !== '\x1b[D') {
+      currentLine += e;
+      term.write(e);
+    }
   }
 });
+
+// Update the initial welcome message to match the new prompt
+term.write('\r\nC:\\workspace> ');
 
 // 6. Make sure it resizes when the browser window changes
 window.addEventListener('resize', () => {
@@ -430,6 +520,12 @@ async function verifyPermission(fileHandle, readWrite) {
   return false;
 }
 async function switchTab(fullPath){
+  // NEW: Guard to prevent crashes if Monaco hasn't loaded
+  if (!activeEditor) {
+    printToTerminal("Hold on! The editor is still loading in the background.", "#cbcb41");
+    return;
+  }
+
   if (activeEditor === editor1 && currentFile1 === fullPath) return; 
   if (activeEditor === editor2 && currentFile2 === fullPath) return; 
 
@@ -473,106 +569,25 @@ async function closeTab(fullPath){
   }
   
   renderTabs();
+  document.getElementById("cursor-position").innerText = "Ln 1, Col 1";
 }
-
-/* TERMINAL & RUN LOGIC */
-const termInput = document.getElementById("terminal-input");
-const termHistory = document.getElementById("terminal-history");
-
-let cmdHistory = [];
-let historyIndex = -1;
 
 // Helper to simulate delays for a realistic feel
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-termInput.addEventListener("keydown", async function(e) {
-  if (e.key === "Enter") {
-    const cmd = this.value.trim();
-    if(!cmd) return;
-    
-    cmdHistory.push(cmd);
-    historyIndex = cmdHistory.length; 
-    this.value = "";
-    
-    printToTerminal(`C:\\workspace> ${cmd}`, "#569cd6");
-    
-    const args = cmd.split(" ");
-    const commandLower = args[0].toLowerCase();
+function printToTerminal(text, color = "default") {
+  // xterm.js uses ANSI escape codes for colors instead of hex codes
+  let colorCode = "\x1b[37m"; // Default White
+  
+  if (color === "#f48771") colorCode = "\x1b[31m"; // Red for errors
+  if (color === "#89d185") colorCode = "\x1b[32m"; // Green for success
+  if (color === "#569cd6") colorCode = "\x1b[34m"; // Blue for info
+  if (color === "#cbcb41") colorCode = "\x1b[33m"; // Yellow for warnings
 
-    // 1. Clear Command
-    if (commandLower === "clear" || commandLower === "cls") {
-      termHistory.innerHTML = "";
-      return;
-    } 
-    
-    // 2. Help Command
-    if (commandLower === "help") {
-      printToTerminal("Available commands:");
-      printToTerminal("  clear / cls       : Clears the terminal screen");
-      printToTerminal("  npm install <pkg> : Simulates installing a package");
-      printToTerminal("  [JS Code]         : Evaluates any valid JavaScript");
-      return;
-    }
-
-    // 3. Fake NPM Install Command!
-    if (commandLower === "npm" && (args[1] === "install" || args[1] === "i") && args[2]) {
-      const pkgName = args[2];
-      termInput.disabled = true; // Lock input while "installing"
-      
-      printToTerminal(`npm notice Fetching ${pkgName}...`, "#cccccc");
-      await sleep(600);
-      printToTerminal(`[..................] - fetchMetadata: sill resolveWithNewModule ${pkgName}@latest`, "#858585");
-      await sleep(800);
-      printToTerminal(`[====..............] - extractTree: sill extract ${pkgName}`, "#858585");
-      await sleep(500);
-      printToTerminal(`[==========........] - build: sill linkDependencies`, "#858585");
-      await sleep(700);
-      
-      printToTerminal(`\nadded 1 package, and audited 2 packages in 2s`, "#89d185");
-      printToTerminal(`found 0 vulnerabilities`, "#89d185");
-      
-      // Pro-tip for the user
-      printToTerminal(`\n[Tip] Since this is a browser IDE, import this package via CDN in your code:`, "#569cd6");
-      printToTerminal(`import ${pkgName} from 'https://esm.sh/${pkgName}';`, "#ce9178");
-      
-      termInput.disabled = false;
-      termInput.focus();
-      return;
-    }
-
-    // 4. Evaluate as JavaScript
-    try {
-      let result = eval(cmd);
-      if (result !== undefined) printToTerminal(String(result));
-    } catch(err) {
-      printToTerminal(`Uncaught ${err.name}: ${err.message}`, "#f48771");
-    }
-
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault(); 
-    if (historyIndex > 0) {
-      historyIndex--;
-      this.value = cmdHistory[historyIndex];
-    }
-  } else if (e.key === "ArrowDown") {
-    e.preventDefault();
-    if (historyIndex < cmdHistory.length - 1) {
-      historyIndex++;
-      this.value = cmdHistory[historyIndex];
-    } else {
-      historyIndex = cmdHistory.length;
-      this.value = "";
-    }
-  }
-});
-
-function printToTerminal(text, color="#cccccc") {
-  const div = document.createElement("div");
-  div.textContent = text;
-  div.style.color = color;
-  div.style.whiteSpace = "pre-wrap"; // Preserves formatting and line breaks
-  termHistory.appendChild(div);
-  termHistory.scrollTop = termHistory.scrollHeight;
+  // Format text so newlines work correctly in xterm (\r\n)
+  const formattedText = String(text).replace(/\n/g, '\r\n');
+  
+  term.write(`${colorCode}${formattedText}\x1b[0m\r\n`);
 }
 
 function runCode(){
@@ -696,7 +711,7 @@ window.formatCode = async function() {
     // Call Prettier Standalone
     const formatted = await prettier.format(unformatted, {
       parser: parserName,
-      plugins: prettierPlugins, 
+      plugins: window.prettierPlugins || [],
       singleQuote: true,
       tabWidth: 2
     });
