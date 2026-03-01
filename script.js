@@ -216,6 +216,7 @@ async function openFolder() {
 
     // Save the state AFTER the folder is successfully opened!
     saveWorkspaceState();
+    startWebContainer()
     
   } catch (err) {
     printToTerminal("Folder access cancelled or denied.", "#f48771");
@@ -303,12 +304,11 @@ async function createFile() {
   }
 }
 
-// 1. Create the Terminal and match your VS Code CSS theme
 const term = new Terminal({
   theme: {
-    background: '#181818', // Matches your --bg-darker
-    foreground: '#cccccc', // Matches your --text-main
-    cursor: '#007acc',     // Matches your --accent
+    background: '#181818', 
+    foreground: '#cccccc', 
+    cursor: '#007acc',     
     selectionBackground: 'rgba(255, 255, 255, 0.3)'
   },
   fontFamily: "'Courier New', monospace",
@@ -324,118 +324,8 @@ term.loadAddon(fitAddon);
 term.open(document.getElementById('terminal-output'));
 fitAddon.fit();
 
-// 4. Write the welcome message
-term.write('$ ');
-
-// 5. Handle user typing inside xterm
-let currentLine = "";
-let cmdHistory = [];
-let historyIndex = -1;
-
-term.onData(async e => {
-  if (e === '\r') { // User pressed ENTER
-    // Reset for the next line
-    term.write('\r\n' + getPrompt());
-    const cmd = currentLine.trim();
-    
-    if (cmd) {
-      cmdHistory.push(cmd);
-      historyIndex = cmdHistory.length;
-      
-      const args = cmd.split(" ");
-      const commandLower = args[0].toLowerCase();
-
-      // Command Logic
-      if (commandLower === "clear" || commandLower === "cls") {
-        term.clear();
-      } 
-      else if (commandLower === "help") {
-        printToTerminal("Available commands:", "#569cd6");
-        printToTerminal("  clear / cls       : Clears the terminal screen");
-        printToTerminal("  npm install <pkg> : Simulates installing a package");
-        printToTerminal("  touch <filename>  : Creates a new file");
-        printToTerminal("  [JS Code]         : Evaluates any valid JavaScript");
-      }
-      else if (commandLower === "npm" && (args[1] === "install" || args[1] === "i") && args[2]) {
-        const pkgName = args[2];
-        printToTerminal(`npm notice Fetching ${pkgName}...`);
-        await sleep(600);
-        printToTerminal(`[..................] - fetchMetadata: sill resolveWithNewModule ${pkgName}@latest`, "#569cd6");
-        await sleep(800);
-        printToTerminal(`\nadded 1 package in 2s`, "#89d185");
-      }
-      // NEW: touch command
-      else if (commandLower === "touch" && args[1]) {
-        if (!projectFolder) {
-          printToTerminal("Error: Please open a folder first.", "#f48771");
-        } else {
-          const fileName = args[1];
-          try {
-            const fileHandle = await projectFolder.getFileHandle(fileName, { create: true });
-            const writable = await fileHandle.createWritable();
-            await writable.write("");
-            await writable.close();
-            
-            document.getElementById("tree-root").innerHTML = ""; // Clear the old tree
-            await renderFileTree(projectFolder, document.getElementById("tree-root")); // Load the new tree
-            printToTerminal(`Created file: ${fileName}`, "#89d185");
-            openFile(fileName, fileHandle); // Automatically open it in the editor
-          } catch (err) {
-            printToTerminal(`Error creating file: ${err.message}`, "#f48771");
-          }
-        }
-      }
-      else {
-        // Try to evaluate as JS, otherwise say command not found
-        try {
-          let result = eval(cmd);
-          if (result !== undefined) printToTerminal(String(result), "#89d185");
-        } catch(err) {
-           if (err instanceof ReferenceError || err instanceof SyntaxError) {
-             printToTerminal(`Command not found: ${commandLower}`, "#f48771");
-           } else {
-             printToTerminal(`Error: ${err.message}`, "#f48771");
-           }
-        }
-      }
-    }
-    
-    // Reset for the next line
-    term.write('\r\n' + getPrompt());
-    currentLine = "";
-    
-  } else if (e === '\x7F') { // User pressed BACKSPACE
-    if (currentLine.length > 0) {
-      currentLine = currentLine.substring(0, currentLine.length - 1);
-      term.write('\b \b'); // Erase character from screen visually
-    }
-  } else if (e === '\x1b[A') { // UP ARROW (History)
-    if (cmdHistory.length > 0 && historyIndex > 0) {
-      historyIndex--;
-      currentLine = cmdHistory[historyIndex];
-      term.write('\x1b[2K\r' + getPrompt() + currentLine);
-    }
-  } else if (e === '\x1b[B') { // DOWN ARROW (History)
-    if (historyIndex < cmdHistory.length - 1) {
-      historyIndex++;
-      currentLine = cmdHistory[historyIndex];
-      term.write('\x1b[2K\r' + getPrompt() + currentLine);
-    } else if (historyIndex === cmdHistory.length - 1) {
-      historyIndex++;
-      currentLine = "";
-      term.write('\x1b[2K\r' + getPrompt());
-    }
-  } else { // Regular typing
-    // Ignore Right/Left arrow keys for now
-    if (e !== '\x1b[C' && e !== '\x1b[D') {
-      currentLine += e;
-      term.write(e);
-    }
-  }
-});
-
-// Update the initial welcome message to match the new prompt
-term.write('\x1b[1;34mVSCode Online\x1b[0m v1.0.0\r\n\r\n' + getPrompt());
+// Update the initial welcome message
+term.write('\x1b[1;34mVSCode Online\x1b[0m v1.0.0\r\n');
 
 // 6. Make sure it resizes when the browser window changes
 window.addEventListener('resize', () => {
@@ -455,6 +345,16 @@ async function saveFile(path, content) {
     data.unsaved = false;
     renderTabs();
     
+if (webcontainerInstance) {
+      try {
+        // We use the 'path' variable passed into the function
+        const containerPath = `${projectFolder.name}/${path}`;
+        await webcontainerInstance.fs.writeFile(containerPath, content);
+      } catch (wcErr) {
+        console.warn("Could not sync file to WebContainer:", wcErr);
+      }
+    }
+
     // NEW: Auto-refresh Live Preview if it's open!
     updatePreviewIfOpen();
     
@@ -595,23 +495,17 @@ async function closeTab(fullPath){
 // Helper to simulate delays for a realistic feel
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-function getPrompt() {
-  return projectFolder ? `C:\\${projectFolder.name}> ` : `C:\\workspace> `;
-}
-
 function printToTerminal(text, color = "default") {
-  let colorCode = "\x1b[37m"; // Default White
-  
-  if (color === "#f48771") colorCode = "\x1b[31m"; // Red for errors
-  if (color === "#89d185") colorCode = "\x1b[32m"; // Green for success
-  if (color === "#569cd6") colorCode = "\x1b[34m"; // Blue for info
-  if (color === "#cbcb41") colorCode = "\x1b[33m"; // Yellow for warnings
-  if (color === "#858585") colorCode = "\x1b[90m"; // Grey for system logs
+  let colorCode = "\x1b[37m"; 
+  if (color === "#f48771") colorCode = "\x1b[31m"; 
+  if (color === "#89d185") colorCode = "\x1b[32m"; 
+  if (color === "#569cd6") colorCode = "\x1b[34m"; 
+  if (color === "#cbcb41") colorCode = "\x1b[33m"; 
+  if (color === "#858585") colorCode = "\x1b[90m"; 
 
   const formattedText = String(text).replace(/\n/g, '\r\n');
-  
-  // 1. Clear current line, 2. Print message, 3. Restore dynamic prompt and current typing
-  term.write(`\x1b[2K\r${colorCode}${formattedText}\x1b[0m\r\n${getPrompt()}${currentLine}`);
+  // Simply write the text. The WebContainer shell handles its own prompt now.
+  term.write(`\r\n${colorCode}${formattedText}\x1b[0m\r\n`);
 }
 
 function runCode(){
@@ -879,7 +773,9 @@ await renderFileTree(projectFolder, document.getElementById("tree-root")); // Lo
     
     refreshFileCache(); // Build the file search index in the background
 
+
     printToTerminal(`> Workspace restored: ${projectFolder.name}`, "#89d185");
+    startWebContainer();
   } catch (err) {
     printToTerminal(`Error restoring workspace: ${err.message}`, "#f48771");
   }
@@ -1052,3 +948,94 @@ window.refreshFileCache = async function() {
   if (!projectFolder) return;
   cachedWorkspaceFiles = await scrapeAllFiles(projectFolder);
 };
+
+/* =========================================
+   WEBCONTAINER INTEGRATION
+   ========================================= */
+
+let webcontainerInstance;
+
+// 1. The File System Translator (Reads your local files for the container)
+async function buildContainerFileSystem(dirHandle) {
+  const tree = {};
+  
+  for await (const [name, handle] of dirHandle.entries()) {
+    // Skip heavy folders so we don't crash the browser
+    if (name === 'node_modules' || name === '.git' || name === '.vscode') continue;
+
+    if (handle.kind === 'file') {
+      const fileData = await handle.getFile();
+      const contents = await fileData.text();
+      tree[name] = {
+        file: {
+          contents: contents
+        }
+      };
+    } else if (handle.kind === 'directory') {
+      tree[name] = {
+        directory: await buildContainerFileSystem(handle)
+      };
+    }
+  }
+  return tree;
+}
+
+// 2. The Boot Sequence
+async function startWebContainer() {
+  printToTerminal("> Downloading WebContainer engine...", "#569cd6");
+  
+  try {
+    const { WebContainer } = await import('https://unpkg.com/@webcontainer/api');
+    
+    printToTerminal("> Booting Node.js environment...", "#569cd6");
+    webcontainerInstance = await WebContainer.boot();
+    
+    if (projectFolder) {
+      printToTerminal("> Mounting files...", "#569cd6");
+      const fileSystemTree = await buildContainerFileSystem(projectFolder);
+      
+      // FIX: Wrap the files in a folder named after your project. 
+      // This stabilizes the shell environment.
+      const wrappedTree = {};
+      wrappedTree[projectFolder.name] = { directory: fileSystemTree };
+      
+      await webcontainerInstance.mount(wrappedTree);
+      printToTerminal("> Workspace files mounted successfully!", "#89d185");
+    }
+
+    // Spawn the shell
+    const shellProcess = await webcontainerInstance.spawn('jsh');
+
+    shellProcess.output.pipeTo(
+      new WritableStream({
+        write(data) {
+          term.write(data);
+        }
+      })
+    );
+
+    const input = shellProcess.input.getWriter();
+    
+    // FIX: Set a clean prompt and enter the folder immediately
+    if (projectFolder) {
+      input.write(`export PS1="~/${projectFolder.name} $ "\r`);
+      input.write(`cd "${projectFolder.name}" && clear\r`);
+    }
+
+    // FIX: This ensures special keys like Ctrl+C work so Node doesn't hang
+    term.onData((data) => {
+      input.write(data);
+    });
+
+    // FIX: This stops the terminal from "freezing" when resizing
+    term.onResize((size) => {
+      shellProcess.resize({
+        cols: size.cols,
+        rows: size.rows,
+      });
+    });
+
+  } catch (error) {
+    printToTerminal(`> WebContainer failed: ${error.message}`, "#f48771");
+  }
+}
