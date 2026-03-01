@@ -299,6 +299,66 @@ async function createFile() {
   }
 }
 
+// 1. Create the Terminal and match your VS Code CSS theme
+const term = new Terminal({
+  theme: {
+    background: '#181818', // Matches your --bg-darker
+    foreground: '#cccccc', // Matches your --text-main
+    cursor: '#007acc',     // Matches your --accent
+    selectionBackground: 'rgba(255, 255, 255, 0.3)'
+  },
+  fontFamily: "'Courier New', monospace",
+  fontSize: 13,
+  cursorBlink: true
+});
+
+// 2. Load the Fit Addon so it resizes properly
+const fitAddon = new FitAddon.FitAddon();
+term.loadAddon(fitAddon);
+
+// 3. Attach it to the screen
+term.open(document.getElementById('terminal-output'));
+fitAddon.fit();
+
+// 4. Write the welcome message
+term.write('\x1b[1;34mChromebook IDE\x1b[0m v1.0.0\r\n');
+term.write('$ ');
+
+// 5. Handle user typing (The "Fake" Backend)
+let currentLine = "";
+term.onData(e => {
+  if (e === '\r') { 
+    // User pressed ENTER
+    term.write('\r\n');
+    
+    // Check what they typed!
+    if (currentLine.trim() === "clear") {
+      term.clear();
+    } else if (currentLine.trim() !== "") {
+      term.write(`Command not found: ${currentLine}\r\n`);
+    }
+    
+    // Reset for the next line
+    term.write('$ ');
+    currentLine = "";
+  } else if (e === '\x7F') { 
+    // User pressed BACKSPACE
+    if (currentLine.length > 0) {
+      currentLine = currentLine.substring(0, currentLine.length - 1);
+      term.write('\b \b'); // Erase character from screen
+    }
+  } else {
+    // Regular typing
+    currentLine += e;
+    term.write(e);
+  }
+});
+
+// 6. Make sure it resizes when the browser window changes
+window.addEventListener('resize', () => {
+  fitAddon.fit();
+});
+
 /* MASTER SAVE */
 async function saveFile(path, content) {
   try {

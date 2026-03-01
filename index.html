@@ -7,6 +7,10 @@
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="style.css">
 
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#007acc">
@@ -81,8 +85,9 @@
         <span class="term-tab">TERMINAL</span>
         <span class="term-tab inactive-tab">OUTPUT</span>
       </div>
-      <div id="terminal-history"></div>
-      <div id="terminal-input-line">
+      </div>
+  
+  <div id="terminal-output" style="flex: 1; padding: 10px; overflow: hidden;"></div>
         <span>C:\workspace&gt;</span> 
         <input type="text" id="terminal-input" autocomplete="off" spellcheck="false" />
       </div>
