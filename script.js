@@ -193,7 +193,6 @@ async function openFolder() {
   try {
     projectFolder = await window.showDirectoryPicker({ mode: "readwrite" });
     document.querySelector('.search-bar').innerText = `🔍 ${projectFolder.name}`;
-    refreshFileCache();
     
     // 1. Grab your main tree container
     const tree = document.getElementById("fileTree");
@@ -211,10 +210,9 @@ async function openFolder() {
     // 4. Trigger the new recursive tree function directly into treeRoot!
     // (This replaces your old await loadFolder(...) line)
     await renderFileTree(projectFolder, treeRoot);
+    refreshFileCache();
     
     if(window.innerWidth <= 768) toggleSidebar();
-    
-    refreshFileCache(); // Build the file search index in the background
 
     // Save the state AFTER the folder is successfully opened!
     saveWorkspaceState();
@@ -222,6 +220,23 @@ async function openFolder() {
   } catch (err) {
     printToTerminal("Folder access cancelled or denied.", "#f48771");
   }
+}
+
+// Close palette if clicking outside
+document.addEventListener('mousedown', (e) => {
+  const palette = document.getElementById("command-palette");
+  const searchBar = document.querySelector(".search-bar");
+  
+  if (palette.style.display === "flex" && 
+      !palette.contains(e.target) && 
+      !searchBar.contains(e.target)) {
+    closePalette();
+  }
+});
+
+function closePalette() {
+  document.getElementById("command-palette").style.display = "none";
+  document.querySelector(".search-bar").style.opacity = "1";
 }
 
 /* OPEN FILE */
@@ -824,7 +839,6 @@ window.restoreWorkspace = async function() {
 
     projectFolder = handle;
     document.querySelector('.search-bar').innerText = `🔍 ${projectFolder.name}`;
-    refreshFileCache();
     const tree = document.getElementById("fileTree");
     tree.innerHTML = `
   <div class="folder-title" onclick="toggleRootFolder()" style="cursor: pointer; user-select: none;">
@@ -832,6 +846,7 @@ window.restoreWorkspace = async function() {
   </div>
   <div id="tree-root"></div>
 `;
+
     document.getElementById("tree-root").innerHTML = ""; // Clear the old tree
 await renderFileTree(projectFolder, document.getElementById("tree-root")); // Load the new tree
     
@@ -868,6 +883,7 @@ await renderFileTree(projectFolder, document.getElementById("tree-root")); // Lo
   } catch (err) {
     printToTerminal(`Error restoring workspace: ${err.message}`, "#f48771");
   }
+  refreshFileCache();
 };
 
 /* =========================================

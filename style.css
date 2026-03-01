@@ -7,6 +7,9 @@
   --accent: #007acc;
   --text-main: #cccccc;
   --text-muted: #858585;
+  --palette-bg: #252526;
+  --palette-input-bg: #1e1e1e;
+  --palette-hover: #04395e; /* Exact VS Code selection blue */
 }
 
 /* GENERAL */
@@ -27,18 +30,14 @@ body { margin:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; b
 .mobile-btn { display: none; font-size: 16px; }
 
 /* DROPDOWN & CONTEXT MENUS */
-.dropdown { display: none; position: absolute; top: 100%; left: 0; background: #252526; border: 1px solid var(--border); box-shadow: 0 4px 10px rgba(0,0,0,0.5); border-radius: 4px; min-width: 220px; padding: 5px 0; margin-top: 4px; z-index: 9999; }
+.dropdown { display: none; position: absolute; top: 100%; left: 0; background: var(--palette-bg); border: 1px solid #454545; box-shadow: 0 4px 10px rgba(0,0,0,0.5); border-radius: 4px; min-width: 220px; padding: 5px 0; margin-top: 4px; z-index: 9999; }
 .menu-item.active .dropdown { display: block; }
 .dropdown-item { padding: 6px 20px; display: flex; justify-content: space-between; color: var(--text-main); font-size: 13px; cursor: pointer;}
 .dropdown-item:hover { background: var(--accent); color: #ffffff; }
 .dropdown-item span { color: var(--text-muted); font-size: 11px; }
-.divider { height: 1px; background: var(--border); margin: 4px 0; }
-.context-menu { display: none; position: absolute; background: #252526; border: 1px solid var(--border); box-shadow: 0 4px 10px rgba(0,0,0,0.5); border-radius: 4px; min-width: 150px; padding: 5px 0; z-index: 9999; }
+.divider { height: 1px; background: #454545; margin: 4px 0; }
+.context-menu { display: none; position: absolute; background: var(--palette-bg); border: 1px solid #454545; box-shadow: 0 4px 10px rgba(0,0,0,0.5); border-radius: 4px; min-width: 150px; padding: 5px 0; z-index: 9999; }
 .context-menu.active { display: block; }
-
-/* TITLE BAR CENTER */
-.titlebar-center { flex: 1; display: flex; justify-content: center; }
-.search-bar { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 3px 120px; color: var(--text-main); font-size: 12px; display: flex; align-items: center; gap: 8px;}
 
 /* MAIN APP & FLEXBOX RESIZE FIXES */
 .app { flex:1; display:flex; overflow:hidden; min-width: 0; min-height: 0; }
@@ -52,14 +51,16 @@ body { margin:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; b
 .activity-icon.active::before { content: ''; position: absolute; left: 0; top: -4px; bottom: -4px; width: 2px; background: var(--accent); }
 
 /* SIDEBAR / EXPLORER */
-.sidebar { width:250px; background: var(--bg-darker); display:flex; flex-direction:column; transition: transform 0.3s ease; }
+/* SIDEBAR / EXPLORER */
+.sidebar { width: 250px; background: var(--bg-darker); display: flex; flex-direction: column; transition: transform 0.3s ease; border-right: 1px solid var(--border); /* Adds the vertical separator line */
+}
 .sidebar-header { padding: 10px 20px; font-size: 11px; letter-spacing: 1px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;}
 #fileTree { flex: 1; overflow: auto; padding: 0 10px; font-size: 13px;}
 .open-folder-btn { background: var(--accent); color: white; border: none; padding: 6px; width: 100%; cursor: pointer; border-radius: 2px; margin-top: 10px; font-size: 13px;}
 .open-folder-btn:hover { background: #005f9e; }
 .folder-title { font-weight: bold; font-size: 11px; text-transform: uppercase; margin: 10px 0 5px 0; color: var(--text-muted); letter-spacing: 1px;}
 
-/* FILES & FOLDERS (NEW STRUCTURE) */
+/* FILES & FOLDERS */
 .folder, .file { padding:4px 6px; cursor:pointer; display:flex; align-items:center; gap:6px; white-space: nowrap; color: var(--text-main);}
 .folder:hover, .file:hover { background: var(--bg-hover); color: white;}
 .file-icon { width: 16px; text-align: center; font-weight: bold; font-family: monospace; font-size: 11px;}
@@ -96,7 +97,7 @@ body { margin:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; b
 .status-item:hover { background: rgba(255,255,255,0.2); border-radius: 2px;}
 .status-blue { background: #0066aa; padding: 0 10px; height: 22px; display: flex; align-items: center; margin-left: -10px;}
 
-/* RESPONSIVE DESIGN FOR MOBILE/SMALL WINDOWS */
+/* RESPONSIVE DESIGN */
 @media (max-width: 768px) {
   .mobile-btn { display: block; }
   .titlebar-center { display: none; }
@@ -117,97 +118,126 @@ body { margin:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; b
 }
 
 /* LIVE PREVIEW PANE */
-.preview-header { background: #252526; color: var(--text-main); padding: 5px 15px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); user-select: none; }
+.preview-header { background: var(--palette-bg); color: var(--text-main); padding: 5px 15px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); user-select: none; }
 .close-preview { cursor: pointer; padding: 2px 6px; border-radius: 3px; }
 .close-preview:hover { background: #f48771; color: white; }
 #live-iframe { flex: 1; width: 100%; border: none; border-left: 1px solid var(--border); background: white; }
 
-/* Hide default HTML dropdown arrow */
+/* Custom VS Code Arrow */
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
+summary::before { content: '▶'; font-size: 0.7em; margin-right: 6px; color: #858585; transition: transform 0.1s; display: inline-block; }
+details[open] > summary::before { transform: rotate(90deg); }
+summary, .file-item { cursor: pointer; padding: 4px 5px; border-radius: 3px; display: flex; align-items: center; user-select: none; }
+summary:hover, .file-item:hover { background-color: var(--bg-hover); }
 
-/* Custom VS Code Arrow */
-summary::before {
-  content: '▶';
-  font-size: 0.7em;
-  margin-right: 6px;
-  color: #858585;
-  transition: transform 0.1s;
-  display: inline-block;
-}
+/* =========================================
+   TITLE BAR & COMMAND PALETTE (MATCHES VS CODE)
+   ========================================= */
 
-details[open] > summary::before {
-  transform: rotate(90deg); /* Point down when open */
-}
-
-summary, .file-item {
-  cursor: pointer;
-  padding: 4px 5px;
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  user-select: none;
-}
-summary:hover, .file-item:hover {
-  background-color: #2a2d2e; 
-}
-
-.palette-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
+/* THE ANCHOR */
+.titlebar-center { 
+  flex: 1; 
+  display: flex; 
+  justify-content: center; 
+  position: relative;
   height: 100%;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 2000;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding-top: 50px;
 }
 
+/* THE RESTING BUTTON (Matches VS Code exactly) */
+.search-bar {
+  width: 600px; /* Wider footprint like the screenshot */
+  height: 26px; /* Slightly taller */
+  background: rgba(255, 255, 255, 0.08); 
+  border: 1px solid rgba(255, 255, 255, 0.1); 
+  border-radius: 6px; 
+  color: var(--text-main); 
+  font-size: 12px; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background 0.2s;
+}
+
+.search-bar:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* THE PALETTE (Open State) */
+.palette-overlay {
+  position: absolute;
+  top: 4px; /* Perfectly aligns height with the title bar */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px; /* Same exact width as button */
+  z-index: 5000;
+  display: none;
+  flex-direction: column;
+}
+
+/* OUTER PALETTE DROPDOWN */
 .palette-container {
-  width: 600px;
-  background: var(--bg-darker); /* Ensure this variable matches your theme */
-  border: 1px solid #454545;
-  box-shadow: 0 8px 16px rgba(0,0,0,0.4);
-  border-radius: 6px;
+  width: 100%;
+  background: var(--palette-bg); /* The dropdown background */
+  border: 1px solid #454545; /* Soft gray border around everything */
+  border-radius: 6px; 
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6); /* Deep shadow */
   overflow: hidden;
 }
 
+/* WRAPPER AROUND INPUT TO ALLOW SPACING */
 .palette-input-wrapper {
-  padding: 10px;
-  background: var(--bg-main);
+  padding: 5px; 
+  background: var(--palette-bg);
+  border-bottom: 1px solid #333; /* Line separating input from results */
 }
 
+/* THE ACTUAL TEXT INPUT (Matches screenshot focus ring) */
 #palette-input {
   width: 100%;
-  background: #3c3c3c;
-  border: 1px solid #007acc;
-  color: white;
-  padding: 8px 12px;
+  background: var(--palette-input-bg); /* Darker internal bg */
+  border: 1px solid var(--accent); /* VS Code Blue Ring */
+  border-radius: 4px; 
+  color: #ffffff;
+  padding: 6px 12px;
   outline: none;
-  font-size: 14px;
+  font-size: 13px;
+  box-sizing: border-box;
 }
 
+#palette-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* THE RESULTS LIST */
 #palette-results {
   list-style: none;
   margin: 0;
-  padding: 0;
-  max-height: 300px;
+  padding: 4px 0; /* Tiny bit of padding top and bottom */
+  max-height: 400px;
   overflow-y: auto;
+  background: var(--palette-bg);
 }
 
 #palette-results li {
-  padding: 8px 12px;
+  padding: 5px 15px; /* Comfortable spacing */
   cursor: pointer;
   display: flex;
   align-items: center;
-  color: #cccccc;
+  color: var(--text-main);
   font-size: 13px;
+  line-height: 20px;
 }
 
-#palette-results li:hover {
-  background: #094771;
-  color: white;
+/* The right-aligned metadata text (like keyboard shortcuts or folder paths) */
+#palette-results li span:last-child {
+  opacity: 0.7;
+}
+
+/* THE HOVER/SELECTION STATE */
+#palette-results li:hover, #palette-results li.selected {
+  background: var(--palette-hover); /* The deep blue selection color */
+  color: #ffffff;
 }
