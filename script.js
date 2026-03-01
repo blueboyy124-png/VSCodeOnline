@@ -7,6 +7,7 @@ let currentFile2 = null;
 let saveTimeout;
 let isProgrammaticEdit = false;
 let currentContextItem = null;
+let cachedWorkspaceFiles = []; // Move this to the very top of script.js
 
 /* MOBILE & UI LOGIC */
 function toggleSidebar() {
@@ -62,7 +63,8 @@ async function deleteContextItem() {
         renderTabs();
       }
       
-      await loadFolder(projectFolder, document.getElementById("tree-root"), "");
+      document.getElementById("tree-root").innerHTML = ""; // Clear the old tree
+      await renderFileTree(projectFolder, document.getElementById("tree-root")); // Load the new tree
       printToTerminal(`[System] Deleted: ${name}`, "#89d185");
     } catch(e) {
       printToTerminal(`[Error] Deleting: ${e.message}`, "#f48771");
@@ -103,7 +105,8 @@ async function renameContextItem() {
       renderTabs();
     }
 
-    await loadFolder(projectFolder, document.getElementById("tree-root"), "");
+    document.getElementById("tree-root").innerHTML = ""; // Clear the old tree
+    await renderFileTree(projectFolder, document.getElementById("tree-root")); // Load the new tree
     printToTerminal(`[System] Renamed '${name}' to '${newName}'`, "#89d185");
   } catch(e) {
     printToTerminal(`[Error] Renaming: ${e.message}`, "#f48771");
@@ -142,6 +145,8 @@ require(["vs/editor/editor.main"], function () {
 
   editor1.onDidFocusEditorText(() => { activeEditor = editor1; });
   editor2.onDidFocusEditorText(() => { activeEditor = editor2; });
+
+  let cachedWorkspaceFiles = []; // Holds all files for the Command Palette search
 
   // NEW: Update Status Bar Cursor Position
   const updateCursor = (e) => {
@@ -187,65 +192,35 @@ function triggerManualSave() {
 async function openFolder() {
   try {
     projectFolder = await window.showDirectoryPicker({ mode: "readwrite" });
+    document.querySelector('.search-bar').innerText = `🔍 ${projectFolder.name}`;
+    refreshFileCache();
+    
+    // 1. Grab your main tree container
     const tree = document.getElementById("fileTree");
-    tree.innerHTML = `<div class="folder-title">˅ ${projectFolder.name}</div><div id="tree-root"></div>`;
-    await loadFolder(projectFolder, document.getElementById("tree-root"), "");
+    
+    // 2. Set up your nice folder title and create the empty root div
+    tree.innerHTML = `
+  <div class="folder-title" onclick="toggleRootFolder()" style="cursor: pointer; user-select: none;">
+    <span id="root-arrow">˅</span> ${projectFolder.name}
+  </div>
+  <div id="tree-root"></div>
+`;
+    // 3. Grab that newly created root div
+    const treeRoot = document.getElementById("tree-root");
+    
+    // 4. Trigger the new recursive tree function directly into treeRoot!
+    // (This replaces your old await loadFolder(...) line)
+    await renderFileTree(projectFolder, treeRoot);
     
     if(window.innerWidth <= 768) toggleSidebar();
     
-    // NEW: Save the state AFTER the folder is successfully opened!
+    refreshFileCache(); // Build the file search index in the background
+
+    // Save the state AFTER the folder is successfully opened!
     saveWorkspaceState();
     
   } catch (err) {
     printToTerminal("Folder access cancelled or denied.", "#f48771");
-  }
-}
-
-/* FOLDER LOADER (NEW FULL-ROW CLICK & INDENTATION LOGIC) */
-async function loadFolder(folderHandle, container, pathPrefix) {
-  container.innerHTML = "";
-  for await (const [name, handle] of folderHandle.entries()) {
-    const fullPath = pathPrefix ? `${pathPrefix}/${name}` : name;
-    
-    const wrapper = document.createElement("div");
-
-    if (handle.kind === "file") {
-      wrapper.className = "file";
-      wrapper.style.paddingLeft = "15px";
-      wrapper.innerHTML = getFileIcon(name) + name;
-      wrapper.title = fullPath;
-      
-      // Stop propagation so clicking a file doesn't collapse its parent folder
-      wrapper.onclick = (e) => { e.stopPropagation(); openFile(fullPath, handle); };
-      wrapper.oncontextmenu = (e) => showContextMenu(e, 'file', name, handle, folderHandle, fullPath);
-      
-      container.appendChild(wrapper);
-      
-    } else if (handle.kind === "directory") {
-      wrapper.className = "folder-wrapper collapsed"; // Starts collapsed
-      
-      const header = document.createElement("div");
-      header.className = "folder";
-      header.style.paddingLeft = "15px";
-      header.innerHTML = `<span class="folder-arrow">›</span> ${name}`;
-      
-      // The whole folder row is clickable
-      header.onclick = (e) => { 
-        e.stopPropagation(); 
-        wrapper.classList.toggle("collapsed"); 
-      };
-      header.oncontextmenu = (e) => showContextMenu(e, 'directory', name, handle, folderHandle, fullPath);
-      
-      const subContainer = document.createElement("div");
-      subContainer.className = "folder-contents";
-      subContainer.style.paddingLeft = "10px"; // Indent the children
-      
-      wrapper.appendChild(header);
-      wrapper.appendChild(subContainer);
-      container.appendChild(wrapper);
-      
-      await loadFolder(handle, subContainer, fullPath);
-    }
   }
 }
 
@@ -304,7 +279,8 @@ async function createFile() {
     const writable = await fileHandle.createWritable();
     await writable.write("");
     await writable.close();
-    await loadFolder(projectFolder, document.getElementById("tree-root"), "");
+    document.getElementById("tree-root").innerHTML = ""; // Clear the old tree
+    await renderFileTree(projectFolder, document.getElementById("tree-root")); // Load the new tree
     printToTerminal(`Created file: ${name}`, "#89d185");
     openFile(name, fileHandle);
   } catch (err) {
@@ -343,7 +319,8 @@ let historyIndex = -1;
 
 term.onData(async e => {
   if (e === '\r') { // User pressed ENTER
-    term.write('\r\n');
+    // Reset for the next line
+    term.write('\r\n' + getPrompt());
     const cmd = currentLine.trim();
     
     if (cmd) {
@@ -384,7 +361,8 @@ term.onData(async e => {
             await writable.write("");
             await writable.close();
             
-            await loadFolder(projectFolder, document.getElementById("tree-root"), "");
+            document.getElementById("tree-root").innerHTML = ""; // Clear the old tree
+            await renderFileTree(projectFolder, document.getElementById("tree-root")); // Load the new tree
             printToTerminal(`Created file: ${fileName}`, "#89d185");
             openFile(fileName, fileHandle); // Automatically open it in the editor
           } catch (err) {
@@ -408,7 +386,7 @@ term.onData(async e => {
     }
     
     // Reset for the next line
-    term.write('\r\nC:\\workspace> ');
+    term.write('\r\n' + getPrompt());
     currentLine = "";
     
   } else if (e === '\x7F') { // User pressed BACKSPACE
@@ -420,17 +398,17 @@ term.onData(async e => {
     if (cmdHistory.length > 0 && historyIndex > 0) {
       historyIndex--;
       currentLine = cmdHistory[historyIndex];
-      term.write('\x1b[2K\rC:\\workspace> ' + currentLine);
+      term.write('\x1b[2K\r' + getPrompt() + currentLine);
     }
   } else if (e === '\x1b[B') { // DOWN ARROW (History)
     if (historyIndex < cmdHistory.length - 1) {
       historyIndex++;
       currentLine = cmdHistory[historyIndex];
-      term.write('\x1b[2K\rC:\\workspace> ' + currentLine);
+      term.write('\x1b[2K\r' + getPrompt() + currentLine);
     } else if (historyIndex === cmdHistory.length - 1) {
       historyIndex++;
       currentLine = "";
-      term.write('\x1b[2K\rC:\\workspace> ');
+      term.write('\x1b[2K\r' + getPrompt());
     }
   } else { // Regular typing
     // Ignore Right/Left arrow keys for now
@@ -442,7 +420,7 @@ term.onData(async e => {
 });
 
 // Update the initial welcome message to match the new prompt
-term.write('\r\nC:\\workspace> ');
+term.write('\x1b[1;34mVSCode Online\x1b[0m v1.0.0\r\n\r\n' + getPrompt());
 
 // 6. Make sure it resizes when the browser window changes
 window.addEventListener('resize', () => {
@@ -468,6 +446,33 @@ async function saveFile(path, content) {
   } catch (err) {
     printToTerminal(`[Error] Could not save ${path}: ${err.message}`, "#f48771");
   }
+}
+
+/* RECURSIVE FILE SCRAPER */
+async function scrapeAllFiles(dirHandle, pathPrefix = "") {
+  let files = [];
+  
+  for await (const [name, handle] of dirHandle.entries()) {
+    // SECURITY/PERFORMANCE: Ignore massive or hidden folders so the browser doesn't freeze
+    if (name === 'node_modules' || name === '.git' || name === '.vscode') continue;
+
+    const fullPath = pathPrefix ? `${pathPrefix}/${name}` : name;
+
+    if (handle.kind === 'file') {
+      files.push({ name, fullPath, handle });
+    } else if (handle.kind === 'directory') {
+      // If it's a folder, run this function again (Recursion!)
+      const subFiles = await scrapeAllFiles(handle, fullPath);
+      files = files.concat(subFiles); // Merge the results
+    }
+  }
+  return files;
+}
+
+// Helper to trigger the scrape and update the cache
+async function refreshFileCache() {
+  if (!projectFolder) return;
+  cachedWorkspaceFiles = await scrapeAllFiles(projectFolder);
 }
 
 /* TABS */
@@ -575,19 +580,23 @@ async function closeTab(fullPath){
 // Helper to simulate delays for a realistic feel
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+function getPrompt() {
+  return projectFolder ? `C:\\${projectFolder.name}> ` : `C:\\workspace> `;
+}
+
 function printToTerminal(text, color = "default") {
-  // xterm.js uses ANSI escape codes for colors instead of hex codes
   let colorCode = "\x1b[37m"; // Default White
   
   if (color === "#f48771") colorCode = "\x1b[31m"; // Red for errors
   if (color === "#89d185") colorCode = "\x1b[32m"; // Green for success
   if (color === "#569cd6") colorCode = "\x1b[34m"; // Blue for info
   if (color === "#cbcb41") colorCode = "\x1b[33m"; // Yellow for warnings
+  if (color === "#858585") colorCode = "\x1b[90m"; // Grey for system logs
 
-  // Format text so newlines work correctly in xterm (\r\n)
   const formattedText = String(text).replace(/\n/g, '\r\n');
   
-  term.write(`${colorCode}${formattedText}\x1b[0m\r\n`);
+  // 1. Clear current line, 2. Print message, 3. Restore dynamic prompt and current typing
+  term.write(`\x1b[2K\r${colorCode}${formattedText}\x1b[0m\r\n${getPrompt()}${currentLine}`);
 }
 
 function runCode(){
@@ -666,6 +675,73 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.log('PWA Registration failed:', err));
   });
 } // <--- WE CLOSE THE SERVICE WORKER BLOCK HERE!
+
+async function renderFileTree(dirHandle, parentElement, pathPrefix = "") {
+  const entries = [];
+  for await (const [name, handle] of dirHandle.entries()) {
+    entries.push({ name, handle });
+  }
+
+  // Sort: Folders first, then files alphabetically
+  entries.sort((a, b) => {
+    if (a.handle.kind === b.handle.kind) return a.name.localeCompare(b.name);
+    return a.handle.kind === 'directory' ? -1 : 1;
+  });
+
+  for (const { name, handle } of entries) {
+    const fullPath = pathPrefix ? `${pathPrefix}/${name}` : name;
+
+    if (handle.kind === 'directory') {
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.innerHTML = `<span class="file-icon">📁</span> ${name}`;
+      
+      // RE-ATTACH: Right-click context menu for folders!
+      summary.oncontextmenu = (e) => showContextMenu(e, 'directory', name, handle, dirHandle, fullPath);
+      
+      const childrenContainer = document.createElement('div');
+      childrenContainer.style.paddingLeft = "12px"; // Indent sub-files!
+      
+      details.append(summary, childrenContainer);
+      parentElement.appendChild(details);
+
+      // Lazy load subfolders only when clicked!
+      let isLoaded = false;
+      details.addEventListener('toggle', async () => {
+        if (details.open && !isLoaded) {
+          isLoaded = true;
+          await renderFileTree(handle, childrenContainer, fullPath);
+        }
+      });
+    } else {
+      const fileDiv = document.createElement('div');
+      fileDiv.className = 'file-item';
+      
+      // RE-ATTACH: Your custom colorful file icons!
+      fileDiv.innerHTML = getFileIcon(name) + `<span style="margin-left:5px;">${name}</span>`;
+      
+      // RE-ATTACH: Right-click context menu for files!
+      fileDiv.oncontextmenu = (e) => showContextMenu(e, 'file', name, handle, dirHandle, fullPath);
+      fileDiv.onclick = () => openFile(fullPath, handle);
+      
+      parentElement.appendChild(fileDiv);
+    }
+  }
+}
+
+/* ROOT FOLDER TOGGLE */
+window.toggleRootFolder = function() {
+  const root = document.getElementById("tree-root");
+  const arrow = document.getElementById("root-arrow");
+  
+  if (root.style.display === "none") {
+    root.style.display = "block";
+    arrow.textContent = "˅";
+  } else {
+    root.style.display = "none";
+    arrow.textContent = "›";
+  }
+};
 
 /* RESTORE SESSION ON LOAD */
 window.addEventListener('DOMContentLoaded', async () => {
@@ -747,9 +823,17 @@ window.restoreWorkspace = async function() {
     }
 
     projectFolder = handle;
+    document.querySelector('.search-bar').innerText = `🔍 ${projectFolder.name}`;
+    refreshFileCache();
     const tree = document.getElementById("fileTree");
-    tree.innerHTML = `<div class="folder-title">˅ ${projectFolder.name}</div><div id="tree-root"></div>`;
-    await loadFolder(projectFolder, document.getElementById("tree-root"), "");
+    tree.innerHTML = `
+  <div class="folder-title" onclick="toggleRootFolder()" style="cursor: pointer; user-select: none;">
+    <span id="root-arrow">˅</span> ${projectFolder.name}
+  </div>
+  <div id="tree-root"></div>
+`;
+    document.getElementById("tree-root").innerHTML = ""; // Clear the old tree
+await renderFileTree(projectFolder, document.getElementById("tree-root")); // Load the new tree
     
     // Restore Open Tabs!
     const sessionStr = localStorage.getItem('workspaceSession');
@@ -778,8 +862,177 @@ window.restoreWorkspace = async function() {
       }
     }
     
+    refreshFileCache(); // Build the file search index in the background
+
     printToTerminal(`> Workspace restored: ${projectFolder.name}`, "#89d185");
   } catch (err) {
     printToTerminal(`Error restoring workspace: ${err.message}`, "#f48771");
   }
+};
+
+/* =========================================
+   GLOBAL COMMAND PALETTE & FILE SEARCH
+   ========================================= */
+
+// The DOM elements for our palette
+const paletteOverlay = document.getElementById("command-palette");
+const paletteInput = document.getElementById("palette-input");
+const paletteResults = document.getElementById("palette-results");
+
+// A list of commands for when you type ">"
+const editorCommands = [
+  { label: "Format Document", action: window.formatCode, icon: "✨" },
+  { label: "View: Toggle Split Editor", action: toggleSplit, icon: "◫" },
+  { label: "View: Toggle Sidebar", action: toggleSidebar, icon: "🗂️" },
+  { label: "Terminal: Clear", action: () => term.clear(), icon: "🧹" },
+  { label: "Live Preview: Start", action: previewHTML, icon: "🌐" },
+  { label: "Live Preview: Stop", action: closePreview, icon: "❌" }
+];
+
+// 1. Open and Close Functions
+window.openPalette = function(prefix = "") {
+  const paletteOverlay = document.getElementById("command-palette");
+  const paletteInput = document.getElementById("palette-input");
+
+  if (!paletteOverlay || !paletteInput) return;
+
+  paletteOverlay.style.display = "flex"; // Matches your flex CSS
+  paletteInput.value = prefix;
+  paletteInput.focus();
+  
+  // Trigger initial render for commands if '>' is passed
+  renderPaletteResults(); 
+};
+
+window.closePalette = function() {
+  if (!paletteOverlay) return;
+  paletteOverlay.style.display = "none";
+  paletteInput.value = "";
+  paletteResults.innerHTML = "";
+};
+
+// 2. The Mighty Render Function (Filters files or commands)
+function renderPaletteResults() {
+  const query = paletteInput.value;
+  paletteResults.innerHTML = ""; // Clear old results
+  
+  // COMMAND MODE (Starts with >)
+  if (query.startsWith(">")) {
+    const searchTerm = query.substring(1).toLowerCase().trim();
+    
+    const filteredCommands = editorCommands.filter(cmd => 
+      cmd.label.toLowerCase().includes(searchTerm)
+    );
+    
+    filteredCommands.forEach(cmd => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span style="margin-right: 8px;">${cmd.icon}</span> <span>${cmd.label}</span>`;
+      li.onclick = () => {
+        cmd.action();
+        closePalette();
+      };
+      paletteResults.appendChild(li);
+    });
+  } 
+  
+  // FILE SEARCH MODE
+  else {
+    if (!projectFolder) {
+      const li = document.createElement("li");
+      li.innerHTML = `<span style="margin-right: 8px;">⚠️</span> <span style="color: #cbcb41">Please open a folder first.</span>`;
+      paletteResults.appendChild(li);
+      return;
+    }
+
+    const searchTerm = query.toLowerCase().trim();
+    
+    // Filter our cached files!
+    const filteredFiles = cachedWorkspaceFiles.filter(f => 
+      f.fullPath.toLowerCase().includes(searchTerm)
+    ).slice(0, 50); // Limit to 50 results so the UI doesn't lag
+
+    if (filteredFiles.length === 0) {
+      const li = document.createElement("li");
+      li.innerHTML = `<span style="margin-right: 8px;">❌</span> <span style="color: #858585">No matching files found.</span>`;
+      paletteResults.appendChild(li);
+    } else {
+      filteredFiles.forEach(file => {
+        const li = document.createElement("li");
+        
+        // Show the file name, and put the folder path in grey text next to it
+        const folderPath = file.fullPath.replace(file.name, '');
+        li.innerHTML = `
+          <span style="margin-right: 8px;">${getFileIcon(file.name)}</span> 
+          <span>${file.name}</span> 
+          <span style="color: #858585; font-size: 11px; margin-left: auto;">${folderPath}</span>
+        `;
+        
+        // When clicked, open the file and close the palette
+        li.onclick = () => {
+          openFile(file.fullPath, file.handle);
+          closePalette();
+        };
+        paletteResults.appendChild(li);
+      });
+    }
+  }
+}
+
+// Update results as you type!
+if (paletteInput) {
+  paletteInput.addEventListener("input", renderPaletteResults);
+}
+
+// 3. Global Keyboard Shortcuts (Ctrl+P, F1)
+document.addEventListener("keydown", (e) => {
+  const isCmdOrCtrl = e.ctrlKey || e.metaKey;
+
+  // Ctrl + P (File Search)
+  if (isCmdOrCtrl && e.key.toLowerCase() === "p" && !e.shiftKey) {
+    e.preventDefault(); 
+    openPalette("");
+  }
+  
+  // Ctrl + Shift + P OR F1 (Command Mode)
+  if ((isCmdOrCtrl && e.shiftKey && e.key.toLowerCase() === "p") || e.key === "F1") {
+    e.preventDefault(); 
+    openPalette(">");
+  }
+
+  // Escape to close
+  if (e.key === "Escape" && paletteOverlay && paletteOverlay.style.display === "flex") {
+    e.preventDefault();
+    closePalette();
+  }
+});
+
+// Close if clicking outside the box
+if (paletteOverlay) {
+  paletteOverlay.addEventListener("click", (e) => {
+    if (e.target === paletteOverlay) closePalette();
+  });
+}
+
+// 4. Recursive Scraper (Builds the search cache)
+window.scrapeAllFiles = async function(dirHandle, pathPrefix = "") {
+  let files = [];
+  for await (const [name, handle] of dirHandle.entries()) {
+    // Ignore massive/hidden folders so the browser doesn't freeze
+    if (name === 'node_modules' || name === '.git' || name === '.vscode') continue;
+
+    const fullPath = pathPrefix ? `${pathPrefix}/${name}` : name;
+
+    if (handle.kind === 'file') {
+      files.push({ name, fullPath, handle });
+    } else if (handle.kind === 'directory') {
+      const subFiles = await scrapeAllFiles(handle, fullPath);
+      files = files.concat(subFiles); 
+    }
+  }
+  return files;
+};
+
+window.refreshFileCache = async function() {
+  if (!projectFolder) return;
+  cachedWorkspaceFiles = await scrapeAllFiles(projectFolder);
 };

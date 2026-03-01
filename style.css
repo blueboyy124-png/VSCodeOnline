@@ -121,3 +121,93 @@ body { margin:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; b
 .close-preview { cursor: pointer; padding: 2px 6px; border-radius: 3px; }
 .close-preview:hover { background: #f48771; color: white; }
 #live-iframe { flex: 1; width: 100%; border: none; border-left: 1px solid var(--border); background: white; }
+
+/* Hide default HTML dropdown arrow */
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+
+/* Custom VS Code Arrow */
+summary::before {
+  content: '▶';
+  font-size: 0.7em;
+  margin-right: 6px;
+  color: #858585;
+  transition: transform 0.1s;
+  display: inline-block;
+}
+
+details[open] > summary::before {
+  transform: rotate(90deg); /* Point down when open */
+}
+
+summary, .file-item {
+  cursor: pointer;
+  padding: 4px 5px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+summary:hover, .file-item:hover {
+  background-color: #2a2d2e; 
+}
+
+.palette-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 2000;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 50px;
+}
+
+.palette-container {
+  width: 600px;
+  background: var(--bg-darker); /* Ensure this variable matches your theme */
+  border: 1px solid #454545;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.palette-input-wrapper {
+  padding: 10px;
+  background: var(--bg-main);
+}
+
+#palette-input {
+  width: 100%;
+  background: #3c3c3c;
+  border: 1px solid #007acc;
+  color: white;
+  padding: 8px 12px;
+  outline: none;
+  font-size: 14px;
+}
+
+#palette-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+#palette-results li {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  color: #cccccc;
+  font-size: 13px;
+}
+
+#palette-results li:hover {
+  background: #094771;
+  color: white;
+}

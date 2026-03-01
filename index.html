@@ -45,7 +45,7 @@
   </div>
   
   <div class="titlebar-center">
-    <div class="search-bar">🔍 workspace</div>
+    <div class="search-bar" onclick="openPalette('')" style="cursor: pointer;">🔍 workspace</div>
   </div>
 </div>
 
@@ -120,5 +120,14 @@
 
 <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
 <script src="script.js"></script>
+
+<div id="command-palette" class="palette-overlay" style="display: none;">
+  <div class="palette-container">
+    <div class="palette-input-wrapper">
+      <input type="text" id="palette-input" placeholder="Type '>' for commands, or search files..." autocomplete="off">
+    </div>
+    <ul id="palette-results"></ul>
+  </div>
+</div>
 </body>
 </html>
