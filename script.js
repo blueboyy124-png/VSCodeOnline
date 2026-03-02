@@ -1,6 +1,7 @@
 let editor1, editor2;
 let activeEditor;
 let projectFolder;
+let shellWriter; // This is the master "pen" for the terminal
 let openFiles = {};
 let currentFile1 = null;
 let currentFile2 = null;
@@ -8,6 +9,7 @@ let saveTimeout;
 let isProgrammaticEdit = false;
 let currentContextItem = null;
 let cachedWorkspaceFiles = []; // Move this to the very top of script.js
+
 
 /* MOBILE & UI LOGIC */
 function toggleSidebar() {
@@ -56,6 +58,7 @@ async function deleteContextItem() {
     try {
       await parentHandle.removeEntry(name, { recursive: type === 'directory' });
       
+      // If the deleted file was open, remove it from the editor
       if(openFiles[fullPath]) {
         delete openFiles[fullPath];
         if(currentFile1 === fullPath) currentFile1 = null;
@@ -63,12 +66,33 @@ async function deleteContextItem() {
         renderTabs();
       }
       
-      document.getElementById("tree-root").innerHTML = ""; // Clear the old tree
-      await renderFileTree(projectFolder, document.getElementById("tree-root")); // Load the new tree
+      const treeRoot = document.getElementById("tree-root");
+      if (treeRoot) {
+        treeRoot.innerHTML = ""; 
+        await renderFileTree(projectFolder, treeRoot); 
+      }
+      
+      refreshFileCache();
       printToTerminal(`[System] Deleted: ${name}`, "#89d185");
     } catch(e) {
       printToTerminal(`[Error] Deleting: ${e.message}`, "#f48771");
     }
+  }
+}
+
+async function createFolder() {
+  if(!projectFolder) return;
+  const name = prompt("Folder name:");
+  if(!name) return;
+  
+  try {
+    await projectFolder.getDirectoryHandle(name, { create: true });
+    const treeRoot = document.getElementById("tree-root");
+    treeRoot.innerHTML = "";
+    await renderFileTree(projectFolder, treeRoot);
+    printToTerminal(`Created folder: ${name}`, "#89d185");
+  } catch (err) {
+    printToTerminal(`Error: ${err.message}`, "#f48771");
   }
 }
 
@@ -102,11 +126,10 @@ async function renameContextItem() {
       
       if(currentFile1 === fullPath) currentFile1 = newPath;
       if(currentFile2 === fullPath) currentFile2 = newPath;
-      renderTabs();
     }
 
-    document.getElementById("tree-root").innerHTML = ""; // Clear the old tree
-    await renderFileTree(projectFolder, document.getElementById("tree-root")); // Load the new tree
+    await refreshExplorer();
+    renderTabs();
     printToTerminal(`[System] Renamed '${name}' to '${newName}'`, "#89d185");
   } catch(e) {
     printToTerminal(`[Error] Renaming: ${e.message}`, "#f48771");
@@ -285,6 +308,7 @@ async function openFile(fullPath, handle) {
 }
 
 /* CREATE FILE */
+/* CREATE FILE */
 async function createFile() {
   if(!projectFolder) { printToTerminal("Please open a folder first.", "#f48771"); return; }
   const name = prompt("File name (e.g., style.css, index.html):");
@@ -295,8 +319,17 @@ async function createFile() {
     const writable = await fileHandle.createWritable();
     await writable.write("");
     await writable.close();
-    document.getElementById("tree-root").innerHTML = ""; // Clear the old tree
-    await renderFileTree(projectFolder, document.getElementById("tree-root")); // Load the new tree
+    
+    // Refresh the UI
+    const treeRoot = document.getElementById("tree-root");
+    if (treeRoot) {
+      treeRoot.innerHTML = ""; 
+      await renderFileTree(projectFolder, treeRoot); 
+    }
+    
+    // Update the search cache so the new file shows up in Ctrl+P
+    refreshFileCache();
+    
     printToTerminal(`Created file: ${name}`, "#89d185");
     openFile(name, fileHandle);
   } catch (err) {
@@ -501,11 +534,16 @@ function printToTerminal(text, color = "default") {
   if (color === "#89d185") colorCode = "\x1b[32m"; 
   if (color === "#569cd6") colorCode = "\x1b[34m"; 
   if (color === "#cbcb41") colorCode = "\x1b[33m"; 
-  if (color === "#858585") colorCode = "\x1b[90m"; 
 
   const formattedText = String(text).replace(/\n/g, '\r\n');
-  // Simply write the text. The WebContainer shell handles its own prompt now.
+  
+  // 1. Write the message
   term.write(`\r\n${colorCode}${formattedText}\x1b[0m\r\n`);
+
+  // 2. Instead of Ctrl+C (which wipes PS1), we just send a new line
+  if (shellWriter) {
+    shellWriter.write('\n'); 
+  }
 }
 
 function runCode(){
@@ -982,20 +1020,27 @@ async function buildContainerFileSystem(dirHandle) {
 
 // 2. The Boot Sequence
 async function startWebContainer() {
-  printToTerminal("> Downloading WebContainer engine...", "#569cd6");
-  
+  // 1. Prevent multiple boots
+  if (webcontainerInstance) {
+    printToTerminal("> WebContainer already running. Updating workspace...", "#858585");
+  } else {
+    printToTerminal("> Downloading WebContainer engine...", "#569cd6");
+    try {
+      const { WebContainer } = await import('https://unpkg.com/@webcontainer/api');
+      printToTerminal("> Booting Node.js environment...", "#569cd6");
+      webcontainerInstance = await WebContainer.boot();
+    } catch (error) {
+      printToTerminal(`> WebContainer boot failed: ${error.message}`, "#f48771");
+      return;
+    }
+  }
+
   try {
-    const { WebContainer } = await import('https://unpkg.com/@webcontainer/api');
-    
-    printToTerminal("> Booting Node.js environment...", "#569cd6");
-    webcontainerInstance = await WebContainer.boot();
-    
+    // 2. Clear terminal and mount files
+    term.clear();
     if (projectFolder) {
       printToTerminal("> Mounting files...", "#569cd6");
       const fileSystemTree = await buildContainerFileSystem(projectFolder);
-      
-      // FIX: Wrap the files in a folder named after your project. 
-      // This stabilizes the shell environment.
       const wrappedTree = {};
       wrappedTree[projectFolder.name] = { directory: fileSystemTree };
       
@@ -1003,39 +1048,48 @@ async function startWebContainer() {
       printToTerminal("> Workspace files mounted successfully!", "#89d185");
     }
 
-    // Spawn the shell
-    const shellProcess = await webcontainerInstance.spawn('jsh');
+    // 3. Spawn with explicit terminal dimensions
+    const shellProcess = await webcontainerInstance.spawn('jsh', {
+      terminal: {
+        cols: term.cols,
+        rows: term.rows,
+      }
+    });
 
     shellProcess.output.pipeTo(
       new WritableStream({
-        write(data) {
-          term.write(data);
-        }
+        write(data) { term.write(data); }
       })
     );
 
-    const input = shellProcess.input.getWriter();
-    
-    // FIX: Set a clean prompt and enter the folder immediately
-    if (projectFolder) {
-      input.write(`export PS1="~/${projectFolder.name} $ "\r`);
-      input.write(`cd "${projectFolder.name}" && clear\r`);
-    }
+    // FIX: Assign to the GLOBAL variable we created at the top
+    shellWriter = shellProcess.input.getWriter();
 
-    // FIX: This ensures special keys like Ctrl+C work so Node doesn't hang
+    // 4. The "Safe-Start" Sequence
+    setTimeout(async () => {
+      if (projectFolder && shellWriter) {
+        // FIX: Changed 'input' to 'shellWriter'
+        await shellWriter.write(`export PS1="~/${projectFolder.name} $ "\r`);
+        setTimeout(() => {
+          shellWriter.write(`cd "${projectFolder.name}" && clear\r`);
+        }, 200);
+      }
+    }, 600); 
+
+    // FIX: Changed 'input' to 'shellWriter' so typing works!
     term.onData((data) => {
-      input.write(data);
+      if (shellWriter) {
+        shellWriter.write(data);
+      }
     });
 
-    // FIX: This stops the terminal from "freezing" when resizing
     term.onResize((size) => {
-      shellProcess.resize({
-        cols: size.cols,
-        rows: size.rows,
-      });
+      if (shellProcess) {
+        shellProcess.resize({ cols: size.cols, rows: size.rows });
+      }
     });
 
   } catch (error) {
-    printToTerminal(`> WebContainer failed: ${error.message}`, "#f48771");
+    printToTerminal(`> Shell Error: ${error.message}`, "#f48771");
   }
 }
