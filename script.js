@@ -8,7 +8,11 @@ let currentFile2 = null;
 let saveTimeout;
 let isProgrammaticEdit = false;
 let currentContextItem = null;
-let cachedWorkspaceFiles = []; // Move this to the very top of script.js
+let cachedWorkspaceFiles = [];
+let webcontainerInstance = null;
+let termDataDisposable = null;
+let isSyncingFile = false; // Suppresses fs.watch tree refresh during our own programmatic saves
+let previewMode = null;   // 'srcdoc' | 'server' — tracks what the preview iframe is showing
 
 
 /* MOBILE & UI LOGIC */
@@ -112,13 +116,16 @@ async function renameContextItem() {
     const file = await handle.getFile();
     const content = await file.text();
     
+    // Create the new file with the new name
     const newHandle = await parentHandle.getFileHandle(newName, { create: true });
     const writable = await newHandle.createWritable();
     await writable.write(content);
     await writable.close();
     
+    // Delete the old file
     await parentHandle.removeEntry(name);
     
+    // Update the editor state if the file was currently open
     if(openFiles[fullPath]) {
       const newPath = fullPath.substring(0, fullPath.lastIndexOf('/') + 1) + newName;
       openFiles[newPath] = { handle: newHandle, content, unsaved: openFiles[fullPath].unsaved };
@@ -128,8 +135,16 @@ async function renameContextItem() {
       if(currentFile2 === fullPath) currentFile2 = newPath;
     }
 
-    await refreshExplorer();
+    // Refresh the UI safely!
+    const treeRoot = document.getElementById("tree-root");
+    if (treeRoot) {
+        treeRoot.innerHTML = ""; // Clear the old tree
+        await renderFileTree(projectFolder, treeRoot); // Load the new tree
+    }
+    
     renderTabs();
+    refreshFileCache(); // Update the Ctrl+P search cache
+    
     printToTerminal(`[System] Renamed '${name}' to '${newName}'`, "#89d185");
   } catch(e) {
     printToTerminal(`[Error] Renaming: ${e.message}`, "#f48771");
@@ -138,11 +153,18 @@ async function renameContextItem() {
 
 /* LANGUAGE HELPERS */
 function getLanguageForFile(filename) {
-  if (filename.endsWith('.html')) return 'html';
-  if (filename.endsWith('.css')) return 'css';
+  if (filename.endsWith('.html') || filename.endsWith('.htm')) return 'html';
+  if (filename.endsWith('.css') || filename.endsWith('.scss') || filename.endsWith('.less')) return 'css';
   if (filename.endsWith('.json')) return 'json';
-  if (filename.endsWith('.ts')) return 'typescript';
-  return 'javascript'; 
+  if (filename.endsWith('.ts') || filename.endsWith('.tsx')) return 'typescript';
+  if (filename.endsWith('.js') || filename.endsWith('.jsx') || filename.endsWith('.mjs') || filename.endsWith('.cjs')) return 'javascript';
+  if (filename.endsWith('.md') || filename.endsWith('.markdown')) return 'markdown';
+  if (filename.endsWith('.py')) return 'python';
+  if (filename.endsWith('.yaml') || filename.endsWith('.yml')) return 'yaml';
+  if (filename.endsWith('.xml') || filename.endsWith('.svg')) return 'xml';
+  if (filename.endsWith('.sh') || filename.endsWith('.bash')) return 'shell';
+  if (filename.endsWith('.sql')) return 'sql';
+  return 'plaintext';
 }
 
 function getFileIcon(filename) {
@@ -168,8 +190,6 @@ require(["vs/editor/editor.main"], function () {
 
   editor1.onDidFocusEditorText(() => { activeEditor = editor1; });
   editor2.onDidFocusEditorText(() => { activeEditor = editor2; });
-
-  let cachedWorkspaceFiles = []; // Holds all files for the Command Palette search
 
   // NEW: Update Status Bar Cursor Position
   const updateCursor = (e) => {
@@ -242,7 +262,12 @@ async function openFolder() {
     startWebContainer()
     
   } catch (err) {
-    printToTerminal("Folder access cancelled or denied.", "#f48771");
+    if (err.name === 'AbortError') {
+      printToTerminal("Folder selection cancelled.", "#858585");
+    } else {
+      printToTerminal(`[Error] Could not open folder: ${err.message}`, "#f48771");
+      console.error(err);
+    }
   }
 }
 
@@ -258,10 +283,6 @@ document.addEventListener('mousedown', (e) => {
   }
 });
 
-function closePalette() {
-  document.getElementById("command-palette").style.display = "none";
-  document.querySelector(".search-bar").style.opacity = "1";
-}
 
 /* OPEN FILE */
 async function openFile(fullPath, handle) {
@@ -357,6 +378,59 @@ term.loadAddon(fitAddon);
 term.open(document.getElementById('terminal-output'));
 fitAddon.fit();
 
+// Custom key handler — runs inside xterm before any default processing.
+// Returning false tells xterm "I handled this, don't do anything else".
+// Returning true tells xterm "handle it normally".
+term.attachCustomKeyEventHandler((e) => {
+  const isCmdOrCtrl = e.ctrlKey || e.metaKey;
+
+  // ── Ctrl+V / Cmd+V → Paste ────────────────────────────────────────────────
+  // The DOM 'paste' event never fires for Ctrl+V when xterm has focus because
+  // xterm absorbs keyboard events. We read the clipboard API directly instead.
+  if (isCmdOrCtrl && e.key === 'v' && e.type === 'keydown') {
+    navigator.clipboard.readText().then((text) => {
+      if (!text) return;
+      if (shellWriter) {
+        shellWriter.write(text);
+      } else {
+        term.write(text);
+      }
+    }).catch(() => {
+      // Clipboard API blocked (e.g. no HTTPS) — fall through to the OS paste
+      // which will trigger the right-click 'paste' DOM event as a fallback
+    });
+    return false; // prevent xterm from typing a literal 'v'
+  }
+
+  // ── Ctrl+C / Cmd+C → Smart copy OR SIGINT ────────────────────────────────
+  // If the user has text selected in the terminal: copy it to the clipboard.
+  // If nothing is selected: send SIGINT (0x03) to kill the running process.
+  if (isCmdOrCtrl && e.key === 'c' && e.type === 'keydown') {
+    const selection = term.getSelection();
+    if (selection) {
+      navigator.clipboard.writeText(selection).catch(() => {});
+      term.clearSelection();
+      return false; // copied — don't also send SIGINT
+    }
+    // Nothing selected — let xterm send \x03 (SIGINT) to the shell naturally
+    return true;
+  }
+
+  return true; // all other keys: let xterm handle normally
+});
+
+// Right-click paste fallback — still works if Clipboard API is unavailable
+document.getElementById('terminal-output').addEventListener('paste', (e) => {
+  e.preventDefault();
+  const text = e.clipboardData.getData('text');
+  if (!text) return;
+  if (shellWriter) {
+    shellWriter.write(text);
+  } else {
+    term.write(text);
+  }
+});
+
 // Update the initial welcome message
 term.write('\x1b[1;34mVSCode Online\x1b[0m v1.0.0\r\n');
 
@@ -369,26 +443,43 @@ window.addEventListener('resize', () => {
 async function saveFile(path, content) {
   try {
     const data = openFiles[path];
-    if (!data) return; 
-    
+    if (!data) return;
+
+    if (data.handle === null) {
+      // Virtual file — lives in WebContainer memory only, no local disk handle
+      if (webcontainerInstance) {
+        isSyncingFile = true;
+        await webcontainerInstance.fs.writeFile(path, content);
+        isSyncingFile = false;
+        data.content = content;
+        data.unsaved = false;
+        renderTabs();
+        updatePreviewIfOpen();
+      }
+      return;
+    }
+
+    // Normal local file — write through the File System Access API handle
     const writable = await data.handle.createWritable();
     await writable.write(content);
     await writable.close();
     
     data.unsaved = false;
     renderTabs();
-    
-if (webcontainerInstance) {
+
+    // Also sync to WebContainer if it's running so the dev server sees the change
+    if (webcontainerInstance) {
       try {
-        // We use the 'path' variable passed into the function
+        isSyncingFile = true;
         const containerPath = `${projectFolder.name}/${path}`;
         await webcontainerInstance.fs.writeFile(containerPath, content);
+        isSyncingFile = false;
       } catch (wcErr) {
+        isSyncingFile = false;
         console.warn("Could not sync file to WebContainer:", wcErr);
       }
     }
 
-    // NEW: Auto-refresh Live Preview if it's open!
     updatePreviewIfOpen();
     
   } catch (err) {
@@ -396,32 +487,6 @@ if (webcontainerInstance) {
   }
 }
 
-/* RECURSIVE FILE SCRAPER */
-async function scrapeAllFiles(dirHandle, pathPrefix = "") {
-  let files = [];
-  
-  for await (const [name, handle] of dirHandle.entries()) {
-    // SECURITY/PERFORMANCE: Ignore massive or hidden folders so the browser doesn't freeze
-    if (name === 'node_modules' || name === '.git' || name === '.vscode') continue;
-
-    const fullPath = pathPrefix ? `${pathPrefix}/${name}` : name;
-
-    if (handle.kind === 'file') {
-      files.push({ name, fullPath, handle });
-    } else if (handle.kind === 'directory') {
-      // If it's a folder, run this function again (Recursion!)
-      const subFiles = await scrapeAllFiles(handle, fullPath);
-      files = files.concat(subFiles); // Merge the results
-    }
-  }
-  return files;
-}
-
-// Helper to trigger the scrape and update the cache
-async function refreshFileCache() {
-  if (!projectFolder) return;
-  cachedWorkspaceFiles = await scrapeAllFiles(projectFolder);
-}
 
 /* TABS */
 function renderTabs() {
@@ -536,14 +601,7 @@ function printToTerminal(text, color = "default") {
   if (color === "#cbcb41") colorCode = "\x1b[33m"; 
 
   const formattedText = String(text).replace(/\n/g, '\r\n');
-  
-  // 1. Write the message
   term.write(`\r\n${colorCode}${formattedText}\x1b[0m\r\n`);
-
-  // 2. Instead of Ctrl+C (which wipes PS1), we just send a new line
-  if (shellWriter) {
-    shellWriter.write('\n'); 
-  }
 }
 
 function runCode(){
@@ -578,40 +636,66 @@ function previewHTML() {
   const previewPane = document.getElementById("preview-pane");
   const iframe = document.getElementById("live-iframe");
   
-  // Show the pane
   previewPane.style.display = "flex";
-  
-  // Inject the code!
-  // If it's just JS, we wrap it in a basic HTML template so it runs
-  let codeToRun = activeEditor.getValue();
+  previewMode = 'srcdoc';
   if (currentFile.endsWith('.js')) {
     codeToRun = `<!DOCTYPE html><html><body><script>${codeToRun}<\/script></body></html>`;
+  } else {
+    // FIX: Inject a <base> tag so relative asset paths (style.css, script.js, images)
+    // resolve correctly. We use a blob URL of the HTML as the base so the iframe
+    // can at least resolve same-directory assets when served from a local server.
+    // For the File System Access API, we also patch relative fetch paths via the base tag.
+    const blob = new Blob([codeToRun], { type: 'text/html' });
+    const blobUrl = URL.createObjectURL(blob);
+    // Inject <base> pointing at the blob so relative hrefs have a base to work from.
+    // This doesn't give full local file access (browser security), but prevents
+    // broken relative links from throwing 404s when assets are inlined or served.
+    codeToRun = codeToRun.replace(
+      /(<head[^>]*>)/i,
+      `$1<base href="${blobUrl}">`
+    );
+    // Revoke the temporary URL after a short delay (it was only needed for the base href value)
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
   }
   
   iframe.srcdoc = codeToRun;
 }
 
 function closePreview() {
+  const iframe = document.getElementById("live-iframe");
   document.getElementById("preview-pane").style.display = "none";
-  document.getElementById("live-iframe").srcdoc = ""; // Clear it out
+  // Clear whichever mode was active
+  if (previewMode === 'server') {
+    iframe.src = 'about:blank';
+  } else {
+    iframe.srcdoc = "";
+  }
+  previewMode = null;
   printToTerminal(`> Closed Live Preview`, "#858585");
 }
 
 function updatePreviewIfOpen() {
   const previewPane = document.getElementById("preview-pane");
-  
-  // If the pane is open, refresh it
-  if (previewPane && previewPane.style.display !== "none") {
-    const currentFile = activeEditor === editor1 ? currentFile1 : currentFile2;
-    if (!currentFile || (!currentFile.endsWith('.html') && !currentFile.endsWith('.js'))) return;
+  if (!previewPane || previewPane.style.display === "none") return;
 
-    let codeToRun = activeEditor.getValue();
-    if (currentFile.endsWith('.js')) {
-      codeToRun = `<!DOCTYPE html><html><body><script>${codeToRun}<\/script></body></html>`;
-    }
-    
-    document.getElementById("live-iframe").srcdoc = codeToRun;
+  // In server mode the iframe is pointed at a WebContainer localhost URL —
+  // the dev server handles its own hot reloads, so we must not touch srcdoc here
+  if (previewMode === 'server') return;
+
+  const currentFile = activeEditor === editor1 ? currentFile1 : currentFile2;
+  if (!currentFile || (!currentFile.endsWith('.html') && !currentFile.endsWith('.js'))) return;
+
+  let codeToRun = activeEditor.getValue();
+  if (currentFile.endsWith('.js')) {
+    codeToRun = `<!DOCTYPE html><html><body><script>${codeToRun}<\/script></body></html>`;
+  } else {
+    const blob = new Blob([codeToRun], { type: 'text/html' });
+    const blobUrl = URL.createObjectURL(blob);
+    codeToRun = codeToRun.replace(/(<head[^>]*>)/i, `$1<base href="${blobUrl}">`);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
   }
+  
+  document.getElementById("live-iframe").srcdoc = codeToRun;
 }
 
 /* SERVICE WORKER */
@@ -638,21 +722,24 @@ async function renderFileTree(dirHandle, parentElement, pathPrefix = "") {
   for (const { name, handle } of entries) {
     const fullPath = pathPrefix ? `${pathPrefix}/${name}` : name;
 
+    // Always skip .git and .vscode — they're never useful in the explorer
+    if (name === '.git' || name === '.vscode') continue;
+
     if (handle.kind === 'directory') {
       const details = document.createElement('details');
       const summary = document.createElement('summary');
-      summary.innerHTML = `<span class="file-icon">📁</span> ${name}`;
+      // Give node_modules a distinct icon so it's obvious
+      const folderIcon = name === 'node_modules' ? '📦' : '📁';
+      summary.innerHTML = `<span class="file-icon">${folderIcon}</span> ${name}`;
       
-      // RE-ATTACH: Right-click context menu for folders!
       summary.oncontextmenu = (e) => showContextMenu(e, 'directory', name, handle, dirHandle, fullPath);
       
       const childrenContainer = document.createElement('div');
-      childrenContainer.style.paddingLeft = "12px"; // Indent sub-files!
+      childrenContainer.style.paddingLeft = "12px";
       
       details.append(summary, childrenContainer);
       parentElement.appendChild(details);
 
-      // Lazy load subfolders only when clicked!
       let isLoaded = false;
       details.addEventListener('toggle', async () => {
         if (details.open && !isLoaded) {
@@ -663,14 +750,9 @@ async function renderFileTree(dirHandle, parentElement, pathPrefix = "") {
     } else {
       const fileDiv = document.createElement('div');
       fileDiv.className = 'file-item';
-      
-      // RE-ATTACH: Your custom colorful file icons!
       fileDiv.innerHTML = getFileIcon(name) + `<span style="margin-left:5px;">${name}</span>`;
-      
-      // RE-ATTACH: Right-click context menu for files!
       fileDiv.oncontextmenu = (e) => showContextMenu(e, 'file', name, handle, dirHandle, fullPath);
       fileDiv.onclick = () => openFile(fullPath, handle);
-      
       parentElement.appendChild(fileDiv);
     }
   }
@@ -964,14 +1046,12 @@ if (paletteOverlay) {
 }
 
 // 4. Recursive Scraper (Builds the search cache)
-window.scrapeAllFiles = async function(dirHandle, pathPrefix = "") {
+// Defined as a regular function so it is hoisted and callable from anywhere in the file
+async function scrapeAllFiles(dirHandle, pathPrefix = "") {
   let files = [];
   for await (const [name, handle] of dirHandle.entries()) {
-    // Ignore massive/hidden folders so the browser doesn't freeze
     if (name === 'node_modules' || name === '.git' || name === '.vscode') continue;
-
     const fullPath = pathPrefix ? `${pathPrefix}/${name}` : name;
-
     if (handle.kind === 'file') {
       files.push({ name, fullPath, handle });
     } else if (handle.kind === 'directory') {
@@ -980,18 +1060,18 @@ window.scrapeAllFiles = async function(dirHandle, pathPrefix = "") {
     }
   }
   return files;
-};
+}
+window.scrapeAllFiles = scrapeAllFiles; // also expose on window for inline onclick handlers
 
-window.refreshFileCache = async function() {
+async function refreshFileCache() {
   if (!projectFolder) return;
   cachedWorkspaceFiles = await scrapeAllFiles(projectFolder);
-};
+}
+window.refreshFileCache = refreshFileCache;
 
 /* =========================================
    WEBCONTAINER INTEGRATION
    ========================================= */
-
-let webcontainerInstance;
 
 // 1. The File System Translator (Reads your local files for the container)
 async function buildContainerFileSystem(dirHandle) {
@@ -1029,6 +1109,17 @@ async function startWebContainer() {
       const { WebContainer } = await import('https://unpkg.com/@webcontainer/api');
       printToTerminal("> Booting Node.js environment...", "#569cd6");
       webcontainerInstance = await WebContainer.boot();
+      webcontainerInstance.on('server-ready', (port, url) => {
+        printToTerminal(`> 🚀 Server ready at ${url}`, "#89d185");
+        const previewPane = document.getElementById("preview-pane");
+        const iframe = document.getElementById("live-iframe");
+        if (previewPane && iframe) {
+          previewPane.style.display = "flex";
+          previewMode = 'server';
+          iframe.removeAttribute('srcdoc'); // clear any previous srcdoc content
+          iframe.src = url;
+        }
+      });
     } catch (error) {
       printToTerminal(`> WebContainer boot failed: ${error.message}`, "#f48771");
       return;
@@ -1046,6 +1137,34 @@ async function startWebContainer() {
       
       await webcontainerInstance.mount(wrappedTree);
       printToTerminal("> Workspace files mounted successfully!", "#89d185");
+
+      // Watch the virtual filesystem for any changes (npm install, file creation, etc.)
+      // and debounce a full tree refresh so the explorer stays up to date automatically.
+      let refreshDebounce = null;
+      webcontainerInstance.fs.watch(
+        '/',
+        { recursive: true },
+        () => {
+          // Ignore changes we triggered ourselves (saves/syncs) — only react to
+          // external writes like npm install adding files to node_modules
+          if (isSyncingFile) return;
+          clearTimeout(refreshDebounce);
+          refreshDebounce = setTimeout(async () => {
+            const treeRoot = document.getElementById('tree-root');
+            if (treeRoot && projectFolder) {
+              treeRoot.innerHTML = '';
+              await renderVirtualTree(`/${projectFolder.name}`, treeRoot);
+            }
+          }, 800);
+        }
+      );
+
+      const treeRoot = document.getElementById("tree-root");
+  if (treeRoot) {
+    treeRoot.innerHTML = ""; // Clear the local Chromebook view
+    // Start the virtual view using the project name as the root path
+    await renderVirtualTree(`/${projectFolder.name}`, treeRoot);
+  }
     }
 
     // 3. Spawn with explicit terminal dimensions
@@ -1076,8 +1195,13 @@ async function startWebContainer() {
       }
     }, 600); 
 
-    // FIX: Changed 'input' to 'shellWriter' so typing works!
-    term.onData((data) => {
+    // FIX: Dispose any previous onData listener before registering a new one
+    // to prevent keystrokes being sent to the shell multiple times on reconnect
+    if (termDataDisposable) {
+      termDataDisposable.dispose();
+      termDataDisposable = null;
+    }
+    termDataDisposable = term.onData((data) => {
       if (shellWriter) {
         shellWriter.write(data);
       }
@@ -1091,5 +1215,87 @@ async function startWebContainer() {
 
   } catch (error) {
     printToTerminal(`> Shell Error: ${error.message}`, "#f48771");
+  }
+}
+
+async function renderVirtualTree(path = '/', parentElement) {
+  if (!webcontainerInstance) return;
+
+  try {
+    // Read ONLY the current directory layer
+    const entries = await webcontainerInstance.fs.readdir(path, { withFileTypes: true });
+
+    // Sort folders first, then files
+    entries.sort((a, b) => {
+      if (a.isDirectory() === b.isDirectory()) return a.name.localeCompare(b.name);
+      return a.isDirectory() ? -1 : 1;
+    });
+
+    for (const entry of entries) {
+      // Always skip .git — never useful in the explorer
+      if (entry.name === '.git') continue;
+
+      const fullPath = path === '/' ? `/${entry.name}` : `${path}/${entry.name}`;
+
+      if (entry.isDirectory()) {
+        const details = document.createElement('details');
+        const summary = document.createElement('summary');
+        const folderIcon = entry.name === 'node_modules' ? '📦' : '📁';
+        summary.innerHTML = `<span class="file-icon">${folderIcon}</span> ${entry.name}`;
+        
+        const childrenContainer = document.createElement('div');
+        childrenContainer.style.paddingLeft = "12px"; 
+        
+        details.append(summary, childrenContainer);
+        parentElement.appendChild(details);
+
+        let isLoaded = false;
+
+        details.addEventListener('toggle', async () => {
+          if (details.open && !isLoaded) {
+            isLoaded = true;
+            summary.innerHTML = `<span class="file-icon">📂</span> ${entry.name}`;
+            childrenContainer.innerHTML = "<div style='color:#858585; font-size:12px;'>Loading...</div>";
+            
+            await new Promise(resolve => setTimeout(resolve, 100));
+            childrenContainer.innerHTML = ""; 
+            await renderVirtualTree(fullPath, childrenContainer);
+          } else if (!details.open) {
+            summary.innerHTML = `<span class="file-icon">${folderIcon}</span> ${entry.name}`;
+          }
+        });
+
+      } else {
+        const fileDiv = document.createElement('div');
+        fileDiv.className = 'file-item';
+        fileDiv.innerHTML = getFileIcon(entry.name) + `<span style="margin-left:5px;">${entry.name}</span>`;
+        
+        // When clicked, open the file from the WebContainer into the active editor
+        fileDiv.onclick = async () => {
+           if (!activeEditor) return;
+           try {
+             const fileContent = await webcontainerInstance.fs.readFile(fullPath, 'utf-8');
+             // Store in openFiles so tabs and saving work correctly
+             openFiles[fullPath] = { handle: null, content: fileContent, unsaved: false };
+             if (activeEditor === editor1) currentFile1 = fullPath;
+             else currentFile2 = fullPath;
+             isProgrammaticEdit = true;
+             activeEditor.setValue(fileContent);
+             isProgrammaticEdit = false;
+             const lang = getLanguageForFile(entry.name);
+             monaco.editor.setModelLanguage(activeEditor.getModel(), lang);
+             document.getElementById("status-lang").innerText = lang.charAt(0).toUpperCase() + lang.slice(1);
+             renderTabs();
+             printToTerminal(`> Opened: ${fullPath}`, "#858585");
+           } catch (err) {
+             printToTerminal(`[Error] Could not open virtual file: ${err.message}`, "#f48771");
+           }
+        };
+        
+        parentElement.appendChild(fileDiv);
+      }
+    }
+  } catch (error) {
+    console.error("Error reading virtual directory:", error);
   }
 }
