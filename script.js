@@ -432,7 +432,7 @@ document.getElementById('terminal-output').addEventListener('paste', (e) => {
 });
 
 // Update the initial welcome message
-term.write('\x1b[1;34mVSCode Online\x1b[0m v1.0.0\r\n');
+term.write('\x1b[1;34mVSCode Online\x1b[0m v1.0.1\r\n');
 
 // 6. Make sure it resizes when the browser window changes
 window.addEventListener('resize', () => {
