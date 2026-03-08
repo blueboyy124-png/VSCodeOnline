@@ -1,10 +1,12 @@
 {
+  "id": "/",
   "name": "VS Code Online",
   "short_name": "VSCode",
   "start_url": "./",
+  "display_override": ["window-controls-overlay"],
   "display": "standalone",
   "background_color": "#181818",
-  "theme_color": "#007acc",
+  "theme_color": "#181818",
   "icons": [
     {
       "src": "icon-192.png",

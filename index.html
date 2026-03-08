@@ -11,141 +11,160 @@
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="theme-color" content="#007acc">
+<meta name="theme-color" content="#181818">
 </head>
 <body>
 
 <!-- TITLE BAR -->
 <div class="titlebar">
-  <div class="menubar">
-    <div class="menu-item mobile-btn" onclick="toggleSidebar()">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="16" height="2"/><rect y="7" width="16" height="2"/><rect y="12" width="16" height="2"/></svg>
+
+  <!-- Left zone: app icon + menus + nav arrows -->
+  <div class="titlebar-left">
+    <!-- VS Code app icon -->
+    <div class="titlebar-app-icon" title="VS Code Online">
+      <svg width="18" height="18" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <mask id="vsc-mask" mask-type="alpha"><path d="M70.9 4.4L37.2 36.6 15.6 19.4 4.4 25.8v48.4l11.2 6.4 21.6-17.2 33.7 32.2 20.7-9.9V14.3L70.9 4.4z"/></mask>
+        <g mask="url(#vsc-mask)">
+          <path d="M91.6 14.3L70.9 4.4 37.2 36.6 15.6 19.4 4.4 25.8 26 50 4.4 74.2l11.2 6.4 21.6-17.2 33.7 32.2 20.7-9.9V14.3z" fill="#fff"/>
+          <path d="M70.9 4.4L37.2 36.6V63.4L70.9 95.6l20.7-9.9V14.3L70.9 4.4z" fill="rgba(0,0,0,.25)"/>
+          <path d="M15.6 80.6l21.6-17.2V36.6L15.6 19.4 4.4 25.8v48.4l11.2 6.4z" fill="rgba(0,0,0,.25)"/>
+        </g>
+      </svg>
     </div>
 
-    <div class="menu-item" id="file-menu-container" onclick="toggleMenu(event,'file-menu')">File
-      <div class="dropdown" id="file-menu">
-        <div class="dropdown-item" onclick="createFile()">New Text File <span>Ctrl+N</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="openFolder()">Open Folder... <span>Ctrl+K Ctrl+O</span></div>
-        <div class="dropdown-item dropdown-item-arrow" onclick="fileMenuOpenRecent()">Open Recent <span>▶</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="triggerManualSave()">Save <span>Ctrl+S</span></div>
-        <div class="dropdown-item" onclick="fileMenuSaveAs()">Save As... <span>Ctrl+Shift+S</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="fileMenuToggleAutoSave()"><span class="menu-check" id="autosave-check">✓</span>Auto Save</div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="fileMenuRevertFile()">Revert File</div>
-        <div class="dropdown-item" onclick="fileMenuCloseEditor()">Close Editor <span>Ctrl+F4</span></div>
-        <div class="dropdown-item" onclick="fileMenuCloseFolder()">Close Folder <span>Ctrl+K F</span></div>
+    <!-- Menu bar -->
+    <div class="menubar">
+      <div class="menu-item mobile-btn" onclick="toggleSidebar()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="16" height="2"/><rect y="7" width="16" height="2"/><rect y="12" width="16" height="2"/></svg>
+      </div>
+      <div class="menu-item" id="file-menu-container" onclick="toggleMenu(event,'file-menu')">File
+        <div class="dropdown" id="file-menu">
+          <div class="dropdown-item" onclick="createFile()">New Text File <span>Ctrl+N</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="openFolder()">Open Folder... <span>Ctrl+K Ctrl+O</span></div>
+          <div class="dropdown-item dropdown-item-arrow" onclick="fileMenuOpenRecent()">Open Recent <span>▶</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="triggerManualSave()">Save <span>Ctrl+S</span></div>
+          <div class="dropdown-item" onclick="fileMenuSaveAs()">Save As... <span>Ctrl+Shift+S</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="fileMenuToggleAutoSave()"><span class="menu-check" id="autosave-check">✓</span>Auto Save</div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="fileMenuRevertFile()">Revert File</div>
+          <div class="dropdown-item" onclick="fileMenuCloseEditor()">Close Editor <span>Ctrl+F4</span></div>
+          <div class="dropdown-item" onclick="fileMenuCloseFolder()">Close Folder <span>Ctrl+K F</span></div>
+        </div>
+      </div>
+      <div class="menu-item" id="edit-menu-container" onclick="toggleMenu(event,'edit-menu')">Edit
+        <div class="dropdown" id="edit-menu">
+          <div class="dropdown-item" onclick="editMenuUndo()">Undo <span>Ctrl+Z</span></div>
+          <div class="dropdown-item" onclick="editMenuRedo()">Redo <span>Ctrl+Y</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="editMenuCut()">Cut <span>Ctrl+X</span></div>
+          <div class="dropdown-item" onclick="editMenuCopy()">Copy <span>Ctrl+C</span></div>
+          <div class="dropdown-item" onclick="editMenuPaste()">Paste <span>Ctrl+V</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="editMenuFind()">Find <span>Ctrl+F</span></div>
+          <div class="dropdown-item" onclick="editMenuReplace()">Replace <span>Ctrl+H</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="editMenuFindInFiles()">Find in Files <span>Ctrl+Shift+F</span></div>
+          <div class="dropdown-item" onclick="editMenuReplaceInFiles()">Replace in Files <span>Ctrl+Shift+H</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="editMenuToggleLineComment()">Toggle Line Comment <span>Ctrl+/</span></div>
+          <div class="dropdown-item" onclick="editMenuToggleBlockComment()">Toggle Block Comment <span>Shift+Alt+A</span></div>
+          <div class="dropdown-item" onclick="editMenuEmmetExpand()">Emmet: Expand Abbreviation <span>Tab</span></div>
+        </div>
+      </div>
+      <div class="menu-item" id="selection-menu-container" onclick="toggleMenu(event,'selection-menu')">Selection
+        <div class="dropdown" id="selection-menu">
+          <div class="dropdown-item" onclick="editMenuSelectAll()">Select All <span>Ctrl+A</span></div>
+          <div class="dropdown-item" onclick="selectionExpandLine()">Expand Line Selection <span>Ctrl+L</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="selectionCopyLineUp()">Copy Line Up <span>Shift+Alt+Up</span></div>
+          <div class="dropdown-item" onclick="selectionCopyLineDown()">Copy Line Down <span>Shift+Alt+Down</span></div>
+          <div class="dropdown-item" onclick="selectionMoveLineUp()">Move Line Up <span>Alt+Up</span></div>
+          <div class="dropdown-item" onclick="selectionMoveLineDown()">Move Line Down <span>Alt+Down</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="selectionAddCursorAbove()">Add Cursor Above <span>Ctrl+Alt+Up</span></div>
+          <div class="dropdown-item" onclick="selectionAddCursorBelow()">Add Cursor Below <span>Ctrl+Alt+Down</span></div>
+          <div class="dropdown-item" onclick="selectionSelectNextOccurrence()">Select Next Occurrence <span>Ctrl+D</span></div>
+          <div class="dropdown-item" onclick="selectionSelectAllOccurrences()">Select All Occurrences <span>Ctrl+Shift+L</span></div>
+        </div>
+      </div>
+      <div class="menu-item" id="view-menu-container" onclick="toggleMenu(event,'view-menu')">View
+        <div class="dropdown" id="view-menu">
+          <div class="dropdown-item" onclick="openPalette('>')">Command Palette... <span>Ctrl+Shift+P</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="toggleSidebar()">Toggle Sidebar <span>Ctrl+B</span></div>
+          <div class="dropdown-item" onclick="toggleSplit()">Split Editor <span>Ctrl+\</span></div>
+          <div class="dropdown-item" onclick="previewHTML()">Live Preview</div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="viewMenuZoomIn()">Zoom In <span>Ctrl+=</span></div>
+          <div class="dropdown-item" onclick="viewMenuZoomOut()">Zoom Out <span>Ctrl+-</span></div>
+          <div class="dropdown-item" onclick="viewMenuResetZoom()">Reset Zoom <span>Ctrl+0</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="viewMenuWordWrap()"><span class="menu-check" id="wordwrap-check" style="opacity:0">✓</span>Word Wrap <span>Alt+Z</span></div>
+          <div class="dropdown-item" onclick="viewMenuMinimap()"><span class="menu-check" id="minimap-check" style="opacity:1">✓</span>Minimap</div>
+        </div>
+      </div>
+      <div class="menu-item" id="go-menu-container" onclick="toggleMenu(event,'go-menu')">Go
+        <div class="dropdown" id="go-menu">
+          <div class="dropdown-item" onclick="goMenuBack()">Back <span>Alt+Left</span></div>
+          <div class="dropdown-item" onclick="goMenuForward()">Forward <span>Alt+Right</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="goMenuGoToLine()">Go to Line/Column... <span>Ctrl+G</span></div>
+          <div class="dropdown-item" onclick="goMenuGoToFile()">Go to File... <span>Ctrl+P</span></div>
+          <div class="dropdown-item" onclick="goMenuGoToDefinition()">Go to Definition <span>F12</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="goMenuNextProblem()">Next Problem <span>F8</span></div>
+          <div class="dropdown-item" onclick="goMenuPrevProblem()">Previous Problem <span>Shift+F8</span></div>
+        </div>
+      </div>
+      <div class="menu-item" id="run-menu-container" onclick="toggleMenu(event,'run-menu')">Run
+        <div class="dropdown" id="run-menu">
+          <div class="dropdown-item" onclick="terminalMenuRunActiveFile()">Run Active File <span>F5</span></div>
+          <div class="dropdown-item" onclick="terminalMenuRunSelectedText()">Run Selected Text</div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="runCode()">Run JS in Console</div>
+        </div>
+      </div>
+      <div class="menu-item" id="terminal-menu-container" onclick="toggleMenu(event,'terminal-menu')">Terminal
+        <div class="dropdown" id="terminal-menu">
+          <div class="dropdown-item" onclick="terminalMenuNewTerminal()">New Terminal <span>Ctrl+`</span></div>
+          <div class="dropdown-item" onclick="terminalMenuSplitTerminal()">Split Terminal <span>Ctrl+Shift+5</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="terminalMenuRunActiveFile()">Run Active File</div>
+          <div class="dropdown-item" onclick="terminalMenuRunSelectedText()">Run Selected Text</div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="terminalMenuClear()">Clear Terminal</div>
+          <div class="dropdown-item" onclick="terminalMenuKill()">Kill Terminal</div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="terminalMenuScrollUp()">Scroll Up <span>Shift+PgUp</span></div>
+          <div class="dropdown-item" onclick="terminalMenuScrollDown()">Scroll Down <span>Shift+PgDn</span></div>
+        </div>
+      </div>
+      <div class="menu-item" id="help-menu-container" onclick="toggleMenu(event,'help-menu')">Help
+        <div class="dropdown" id="help-menu">
+          <div class="dropdown-item" onclick="openPalette('>')">Show All Commands <span>Ctrl+Shift+P</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="helpMenuKeyboardShortcuts()">Keyboard Shortcuts <span>Ctrl+K Ctrl+S</span></div>
+          <div class="divider"></div>
+          <div class="dropdown-item" onclick="helpMenuAbout()">About</div>
+        </div>
       </div>
     </div>
 
-    <div class="menu-item" id="edit-menu-container" onclick="toggleMenu(event,'edit-menu')">Edit
-      <div class="dropdown" id="edit-menu">
-        <div class="dropdown-item" onclick="editMenuUndo()">Undo <span>Ctrl+Z</span></div>
-        <div class="dropdown-item" onclick="editMenuRedo()">Redo <span>Ctrl+Y</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="editMenuCut()">Cut <span>Ctrl+X</span></div>
-        <div class="dropdown-item" onclick="editMenuCopy()">Copy <span>Ctrl+C</span></div>
-        <div class="dropdown-item" onclick="editMenuPaste()">Paste <span>Ctrl+V</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="editMenuFind()">Find <span>Ctrl+F</span></div>
-        <div class="dropdown-item" onclick="editMenuReplace()">Replace <span>Ctrl+H</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="editMenuFindInFiles()">Find in Files <span>Ctrl+Shift+F</span></div>
-        <div class="dropdown-item" onclick="editMenuReplaceInFiles()">Replace in Files <span>Ctrl+Shift+H</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="editMenuToggleLineComment()">Toggle Line Comment <span>Ctrl+/</span></div>
-        <div class="dropdown-item" onclick="editMenuToggleBlockComment()">Toggle Block Comment <span>Shift+Alt+A</span></div>
-        <div class="dropdown-item" onclick="editMenuEmmetExpand()">Emmet: Expand Abbreviation <span>Tab</span></div>
-      </div>
-    </div>
-
-    <div class="menu-item" id="selection-menu-container" onclick="toggleMenu(event,'selection-menu')">Selection
-      <div class="dropdown" id="selection-menu">
-        <div class="dropdown-item" onclick="editMenuSelectAll()">Select All <span>Ctrl+A</span></div>
-        <div class="dropdown-item" onclick="selectionExpandLine()">Expand Line Selection <span>Ctrl+L</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="selectionCopyLineUp()">Copy Line Up <span>Shift+Alt+Up</span></div>
-        <div class="dropdown-item" onclick="selectionCopyLineDown()">Copy Line Down <span>Shift+Alt+Down</span></div>
-        <div class="dropdown-item" onclick="selectionMoveLineUp()">Move Line Up <span>Alt+Up</span></div>
-        <div class="dropdown-item" onclick="selectionMoveLineDown()">Move Line Down <span>Alt+Down</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="selectionAddCursorAbove()">Add Cursor Above <span>Ctrl+Alt+Up</span></div>
-        <div class="dropdown-item" onclick="selectionAddCursorBelow()">Add Cursor Below <span>Ctrl+Alt+Down</span></div>
-        <div class="dropdown-item" onclick="selectionSelectNextOccurrence()">Select Next Occurrence <span>Ctrl+D</span></div>
-        <div class="dropdown-item" onclick="selectionSelectAllOccurrences()">Select All Occurrences <span>Ctrl+Shift+L</span></div>
-      </div>
-    </div>
-
-    <div class="menu-item" id="view-menu-container" onclick="toggleMenu(event,'view-menu')">View
-      <div class="dropdown" id="view-menu">
-        <div class="dropdown-item" onclick="openPalette('>')">Command Palette... <span>Ctrl+Shift+P</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="toggleSidebar()">Toggle Sidebar <span>Ctrl+B</span></div>
-        <div class="dropdown-item" onclick="toggleSplit()">Split Editor <span>Ctrl+\</span></div>
-        <div class="dropdown-item" onclick="previewHTML()">Live Preview</div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="viewMenuZoomIn()">Zoom In <span>Ctrl+=</span></div>
-        <div class="dropdown-item" onclick="viewMenuZoomOut()">Zoom Out <span>Ctrl+-</span></div>
-        <div class="dropdown-item" onclick="viewMenuResetZoom()">Reset Zoom <span>Ctrl+0</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="viewMenuWordWrap()"><span class="menu-check" id="wordwrap-check" style="opacity:0">✓</span>Word Wrap <span>Alt+Z</span></div>
-        <div class="dropdown-item" onclick="viewMenuMinimap()"><span class="menu-check" id="minimap-check" style="opacity:1">✓</span>Minimap</div>
-      </div>
-    </div>
-
-    <div class="menu-item" id="go-menu-container" onclick="toggleMenu(event,'go-menu')">Go
-      <div class="dropdown" id="go-menu">
-        <div class="dropdown-item" onclick="goMenuBack()">Back <span>Alt+Left</span></div>
-        <div class="dropdown-item" onclick="goMenuForward()">Forward <span>Alt+Right</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="goMenuGoToLine()">Go to Line/Column... <span>Ctrl+G</span></div>
-        <div class="dropdown-item" onclick="goMenuGoToFile()">Go to File... <span>Ctrl+P</span></div>
-        <div class="dropdown-item" onclick="goMenuGoToDefinition()">Go to Definition <span>F12</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="goMenuNextProblem()">Next Problem <span>F8</span></div>
-        <div class="dropdown-item" onclick="goMenuPrevProblem()">Previous Problem <span>Shift+F8</span></div>
-      </div>
-    </div>
-
-    <div class="menu-item" id="run-menu-container" onclick="toggleMenu(event,'run-menu')">Run
-      <div class="dropdown" id="run-menu">
-        <div class="dropdown-item" onclick="terminalMenuRunActiveFile()">Run Active File <span>F5</span></div>
-        <div class="dropdown-item" onclick="terminalMenuRunSelectedText()">Run Selected Text</div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="runCode()">Run JS in Console</div>
-      </div>
-    </div>
-
-    <div class="menu-item" id="terminal-menu-container" onclick="toggleMenu(event,'terminal-menu')">Terminal
-      <div class="dropdown" id="terminal-menu">
-        <div class="dropdown-item" onclick="terminalMenuNewTerminal()">New Terminal <span>Ctrl+`</span></div>
-        <div class="dropdown-item" onclick="terminalMenuSplitTerminal()">Split Terminal <span>Ctrl+Shift+5</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="terminalMenuRunActiveFile()">Run Active File</div>
-        <div class="dropdown-item" onclick="terminalMenuRunSelectedText()">Run Selected Text</div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="terminalMenuClear()">Clear Terminal</div>
-        <div class="dropdown-item" onclick="terminalMenuKill()">Kill Terminal</div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="terminalMenuScrollUp()">Scroll Up <span>Shift+PgUp</span></div>
-        <div class="dropdown-item" onclick="terminalMenuScrollDown()">Scroll Down <span>Shift+PgDn</span></div>
-      </div>
-    </div>
-
-    <div class="menu-item" id="help-menu-container" onclick="toggleMenu(event,'help-menu')">Help
-      <div class="dropdown" id="help-menu">
-        <div class="dropdown-item" onclick="openPalette('>')">Show All Commands <span>Ctrl+Shift+P</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="helpMenuKeyboardShortcuts()">Keyboard Shortcuts <span>Ctrl+K Ctrl+S</span></div>
-        <div class="divider"></div>
-        <div class="dropdown-item" onclick="helpMenuAbout()">About</div>
-      </div>
+    <!-- Back / Forward navigation arrows -->
+    <div class="titlebar-nav">
+      <button class="titlebar-nav-btn" title="Go Back (Alt+Left)" onclick="goMenuBack()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M9.78 3.47a.75.75 0 0 1 0 1.06L6.31 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L4.69 8.53a.75.75 0 0 1 0-1.06L8.72 3.47a.75.75 0 0 1 1.06 0z"/></svg>
+      </button>
+      <button class="titlebar-nav-btn" title="Go Forward (Alt+Right)" onclick="goMenuForward()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.47a.75.75 0 0 0 0 1.06L9.69 8 6.22 11.47a.75.75 0 1 0 1.06 1.06l4.03-4.03a.75.75 0 0 0 0-1.06L7.28 3.47a.75.75 0 0 0-1.06 0z"/></svg>
+      </button>
     </div>
   </div>
 
-  <!-- Center search / palette -->
+  <!-- Center: search / command palette trigger -->
   <div class="titlebar-center">
     <div id="command-palette" class="palette-overlay" style="display:none;">
       <div class="palette-container">
@@ -156,20 +175,17 @@
       </div>
     </div>
     <div id="search-bar-placeholder" class="search-bar" onclick="openPalette('')">
-      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="opacity:.55;margin-right:7px;flex-shrink:0"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zM5.5 11a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/></svg>
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="opacity:.45;flex-shrink:0"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zM5.5 11a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/></svg>
       <span id="search-bar-text">workspace</span>
+      <div class="search-bar-right">
+        <kbd>Ctrl</kbd><kbd>P</kbd>
+      </div>
     </div>
   </div>
 
-  <!-- Right controls -->
-  <div class="titlebar-right">
-    <div class="titlebar-btn" onclick="toggleSplit()" title="Split Editor">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3zm8.5-1v12H14a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H8.5zm-1 0H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h5.5V2z"/></svg>
-    </div>
-    <div class="titlebar-btn" onclick="window.toggleTerminal()" title="Toggle Terminal">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M6 9a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 6 9zM3.854 4.146a.5.5 0 1 0-.708.708L4.793 6.5 3.146 8.146a.5.5 0 1 0 .708.708l2-2a.5.5 0 0 0 0-.708l-2-2z"/><path d="M2 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2H2zm12 1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h12z"/></svg>
-    </div>
-  </div>
+  <!-- Right zone: intentionally empty — OS window controls (minimize/maximize/close) sit here via WCO -->
+  <div class="titlebar-right"></div>
+
 </div>
 
 <!-- APP BODY -->

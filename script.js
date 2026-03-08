@@ -15,6 +15,26 @@ let termDataDisposable = null;
 let isSyncingFile = false; // Suppresses fs.watch tree refresh during our own programmatic saves
 let previewMode = null;   // 'srcdoc' | 'server' — tracks what the preview iframe is showing
 
+/* ================================================================
+   WINDOW CONTROLS OVERLAY — PWA title bar integration
+   ================================================================ */
+if ('windowControlsOverlay' in navigator) {
+  const onWCOChange = () => {
+    const visible = navigator.windowControlsOverlay.visible;
+    const rect    = navigator.windowControlsOverlay.getTitlebarAreaRect();
+    // Expose the live geometry as CSS custom properties so any rule can use them
+    document.documentElement.style.setProperty('--titlebar-area-x',      rect.x      + 'px');
+    document.documentElement.style.setProperty('--titlebar-area-y',      rect.y      + 'px');
+    document.documentElement.style.setProperty('--titlebar-area-width',  rect.width  + 'px');
+    document.documentElement.style.setProperty('--titlebar-area-height', rect.height + 'px');
+    // Toggle a class so CSS can further distinguish WCO-active vs normal
+    document.body.classList.toggle('wco-active', visible);
+  };
+  navigator.windowControlsOverlay.addEventListener('geometrychange', onWCOChange);
+  // Run once immediately in case we're already in WCO mode on load
+  onWCOChange();
+}
+
 
 /* MOBILE & UI LOGIC */
 function toggleSidebar() {
@@ -2854,6 +2874,13 @@ function applyTheme(id, save = true) {
   if (statusBar && theme.shell) {
     statusBar.style.background = theme.shell['--status-bg'] || '';
     statusBar.style.color      = theme.shell['--status-fg'] || '';
+  }
+
+  // Keep <meta name="theme-color"> in sync so the WCO titlebar area
+  // matches the app background (the OS paints the button strip this colour)
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme && theme.shell) {
+    metaTheme.content = theme.shell['--bg-app'] || '#181818';
   }
 
   // Update settings panel theme name display

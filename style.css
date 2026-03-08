@@ -83,26 +83,94 @@ body {
    ================================================================ */
 .titlebar {
   background: var(--bg-app);
-  height: 30px;
-  display: flex;
+  height: 35px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   position: relative;
   z-index: 1000;
+  transition: background 180ms ease, border-color 180ms ease;
+  overflow: visible;
 }
 
+/* ── Window Controls Overlay (PWA installed mode only) ────────── */
+@media (display-mode: window-controls-overlay) {
+  .titlebar {
+    position: fixed;
+    left:   env(titlebar-area-x,      0);
+    top:    env(titlebar-area-y,      0);
+    width:  env(titlebar-area-width,  100%);
+    height: env(titlebar-area-height, 35px);
+    -webkit-app-region: drag; /* Chromium: makes the bar drag-to-move the window */
+    z-index: 10000;
+    border-bottom: none;
+  }
+  body { padding-top: env(titlebar-area-height, 35px); }
+
+  /* Everything interactive must opt out of drag so clicks still work */
+  .titlebar-left,
+  .titlebar-center,
+  .titlebar-right,
+  .menubar,
+  .menu-item,
+  .mobile-btn,
+  .titlebar-app-icon,
+  .titlebar-nav,
+  .titlebar-nav-btn,
+  .titlebar-btn,
+  .search-bar {
+    -webkit-app-region: no-drag;
+  }
+}
+
+/* Grid zones */
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  min-width: 0;
+  overflow: visible;
+}
+
+.titlebar-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  padding: 4px 8px;
+}
+
+.titlebar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  /* No padding — empty by default, OS buttons sit here via WCO */
+}
+
+/* ── App icon ─────────────────────────────────────────────────── */
+.titlebar-app-icon {
+  width: 40px; height: 35px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: #5191d6;
+  opacity: .9;
+  cursor: default;
+}
+
+/* ── Menubar ──────────────────────────────────────────────────── */
 .menubar {
   display: flex;
   align-items: center;
   height: 100%;
-  padding-left: 4px;
   flex-shrink: 0;
 }
 
 .menu-item {
-  height: 30px;
-  padding: 0 8px;
+  height: 35px;
+  padding: 0 7px;
   display: flex;
   align-items: center;
   cursor: default;
@@ -117,54 +185,66 @@ body {
 .menu-item.active { background: rgba(255,255,255,.12); color: var(--text-bright); }
 .mobile-btn { display: none; cursor: pointer; }
 
-.titlebar-center {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
-  position: relative;
-  padding: 3px 0;
-}
-
-.titlebar-right {
+/* ── Back / Forward navigation arrows ────────────────────────── */
+.titlebar-nav {
   display: flex;
   align-items: center;
-  padding-right: 8px;
+  padding: 0 2px;
+  gap: 0;
   flex-shrink: 0;
-  gap: 2px;
-  height: 100%;
+}
+.titlebar-nav-btn {
+  width: 28px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 4px;
+  transition: background var(--ease-fast), color var(--ease-fast);
+}
+.titlebar-nav-btn:hover { background: rgba(255,255,255,.1); color: var(--text-bright); }
+.titlebar-nav-btn:disabled { opacity: .3; cursor: default; }
+
+/* ── Search bar ───────────────────────────────────────────────── */
+.search-bar {
+  width: 480px; max-width: 100%; height: 24px;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  gap: 6px;
+  cursor: pointer;
+  transition: background var(--ease-mid), border-color var(--ease-mid), box-shadow var(--ease-mid);
+}
+.search-bar:hover {
+  background: rgba(255,255,255,.10);
+  border-color: rgba(255,255,255,.22);
+}
+.search-bar-right {
+  display: flex; align-items: center; gap: 2px; flex-shrink: 0;
+}
+.search-bar-right kbd {
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.15);
+  border-radius: 3px; padding: 1px 5px;
+  font-size: 10px; font-family: inherit;
+  color: var(--text-muted);
 }
 
+/* ── Right layout buttons ─────────────────────────────────────── */
 .titlebar-btn {
-  width: 28px; height: 22px;
+  width: 28px; height: 26px;
   display: flex; align-items: center; justify-content: center;
+  background: none; border: none;
   color: var(--text-muted);
   border-radius: 4px;
   cursor: pointer;
   transition: background var(--ease-fast), color var(--ease-fast);
 }
 .titlebar-btn:hover { background: rgba(255,255,255,.1); color: var(--text-bright); }
-
-/* Search bar */
-.search-bar {
-  width: 560px; height: 24px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background var(--ease-mid), border-color var(--ease-mid), box-shadow var(--ease-mid);
-}
-.search-bar:hover {
-  background: rgba(255,255,255,.09);
-  border-color: rgba(255,255,255,.2);
-  box-shadow: 0 0 0 1px rgba(255,255,255,.08);
-}
 
 /* ================================================================
    DROPDOWN MENUS

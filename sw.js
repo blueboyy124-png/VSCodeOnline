@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mini-vscode-v8';
+const CACHE_NAME = 'mini-vscode-v10';
 
 // These are YOUR app files — always fetch fresh from network, cache as fallback
 const APP_FILES = [
