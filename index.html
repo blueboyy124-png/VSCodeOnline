@@ -6,128 +6,354 @@
 <title>VS Code Online</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="style.css">
-
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
-
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#007acc">
 </head>
-
 <body>
 
+<!-- TITLE BAR -->
 <div class="titlebar">
   <div class="menubar">
-    <div class="menu-item mobile-btn" onclick="toggleSidebar()">☰</div>
+    <div class="menu-item mobile-btn" onclick="toggleSidebar()">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="16" height="2"/><rect y="7" width="16" height="2"/><rect y="12" width="16" height="2"/></svg>
+    </div>
 
-    <div class="menu-item" id="file-menu-container" onclick="toggleMenu(event, 'file-menu')">File
+    <div class="menu-item" id="file-menu-container" onclick="toggleMenu(event,'file-menu')">File
       <div class="dropdown" id="file-menu">
-        <div class="dropdown-item" onclick="createFile()">New File <span>Ctrl+N</span></div>
-        <div class="dropdown-item" onclick="openFolder()">Open Folder... <span>Ctrl+K</span></div>
+        <div class="dropdown-item" onclick="createFile()">New Text File <span>Ctrl+N</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="openFolder()">Open Folder... <span>Ctrl+K Ctrl+O</span></div>
+        <div class="dropdown-item dropdown-item-arrow" onclick="fileMenuOpenRecent()">Open Recent <span>▶</span></div>
         <div class="divider"></div>
         <div class="dropdown-item" onclick="triggerManualSave()">Save <span>Ctrl+S</span></div>
+        <div class="dropdown-item" onclick="fileMenuSaveAs()">Save As... <span>Ctrl+Shift+S</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="fileMenuToggleAutoSave()"><span class="menu-check" id="autosave-check">✓</span>Auto Save</div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="fileMenuRevertFile()">Revert File</div>
+        <div class="dropdown-item" onclick="fileMenuCloseEditor()">Close Editor <span>Ctrl+F4</span></div>
+        <div class="dropdown-item" onclick="fileMenuCloseFolder()">Close Folder <span>Ctrl+K F</span></div>
       </div>
     </div>
-    <div class="menu-item" id="run-menu-container" onclick="toggleMenu(event, 'run-menu')">Run
-      <div class="dropdown" id="run-menu">
-        <div class="dropdown-item" onclick="runCode()">Run JS Code <span>F5</span></div>
+
+    <div class="menu-item" id="edit-menu-container" onclick="toggleMenu(event,'edit-menu')">Edit
+      <div class="dropdown" id="edit-menu">
+        <div class="dropdown-item" onclick="editMenuUndo()">Undo <span>Ctrl+Z</span></div>
+        <div class="dropdown-item" onclick="editMenuRedo()">Redo <span>Ctrl+Y</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="editMenuCut()">Cut <span>Ctrl+X</span></div>
+        <div class="dropdown-item" onclick="editMenuCopy()">Copy <span>Ctrl+C</span></div>
+        <div class="dropdown-item" onclick="editMenuPaste()">Paste <span>Ctrl+V</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="editMenuFind()">Find <span>Ctrl+F</span></div>
+        <div class="dropdown-item" onclick="editMenuReplace()">Replace <span>Ctrl+H</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="editMenuFindInFiles()">Find in Files <span>Ctrl+Shift+F</span></div>
+        <div class="dropdown-item" onclick="editMenuReplaceInFiles()">Replace in Files <span>Ctrl+Shift+H</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="editMenuToggleLineComment()">Toggle Line Comment <span>Ctrl+/</span></div>
+        <div class="dropdown-item" onclick="editMenuToggleBlockComment()">Toggle Block Comment <span>Shift+Alt+A</span></div>
+        <div class="dropdown-item" onclick="editMenuEmmetExpand()">Emmet: Expand Abbreviation <span>Tab</span></div>
       </div>
     </div>
-    <div class="menu-item" id="view-menu-container" onclick="toggleMenu(event, 'view-menu')">View
+
+    <div class="menu-item" id="selection-menu-container" onclick="toggleMenu(event,'selection-menu')">Selection
+      <div class="dropdown" id="selection-menu">
+        <div class="dropdown-item" onclick="editMenuSelectAll()">Select All <span>Ctrl+A</span></div>
+        <div class="dropdown-item" onclick="selectionExpandLine()">Expand Line Selection <span>Ctrl+L</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="selectionCopyLineUp()">Copy Line Up <span>Shift+Alt+Up</span></div>
+        <div class="dropdown-item" onclick="selectionCopyLineDown()">Copy Line Down <span>Shift+Alt+Down</span></div>
+        <div class="dropdown-item" onclick="selectionMoveLineUp()">Move Line Up <span>Alt+Up</span></div>
+        <div class="dropdown-item" onclick="selectionMoveLineDown()">Move Line Down <span>Alt+Down</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="selectionAddCursorAbove()">Add Cursor Above <span>Ctrl+Alt+Up</span></div>
+        <div class="dropdown-item" onclick="selectionAddCursorBelow()">Add Cursor Below <span>Ctrl+Alt+Down</span></div>
+        <div class="dropdown-item" onclick="selectionSelectNextOccurrence()">Select Next Occurrence <span>Ctrl+D</span></div>
+        <div class="dropdown-item" onclick="selectionSelectAllOccurrences()">Select All Occurrences <span>Ctrl+Shift+L</span></div>
+      </div>
+    </div>
+
+    <div class="menu-item" id="view-menu-container" onclick="toggleMenu(event,'view-menu')">View
       <div class="dropdown" id="view-menu">
-        <div class="dropdown-item" onclick="previewHTML()">Live Preview HTML <span>🌐</span></div>
+        <div class="dropdown-item" onclick="openPalette('>')">Command Palette... <span>Ctrl+Shift+P</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="toggleSidebar()">Toggle Sidebar <span>Ctrl+B</span></div>
+        <div class="dropdown-item" onclick="toggleSplit()">Split Editor <span>Ctrl+\</span></div>
+        <div class="dropdown-item" onclick="previewHTML()">Live Preview</div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="viewMenuZoomIn()">Zoom In <span>Ctrl+=</span></div>
+        <div class="dropdown-item" onclick="viewMenuZoomOut()">Zoom Out <span>Ctrl+-</span></div>
+        <div class="dropdown-item" onclick="viewMenuResetZoom()">Reset Zoom <span>Ctrl+0</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="viewMenuWordWrap()"><span class="menu-check" id="wordwrap-check" style="opacity:0">✓</span>Word Wrap <span>Alt+Z</span></div>
+        <div class="dropdown-item" onclick="viewMenuMinimap()"><span class="menu-check" id="minimap-check" style="opacity:0">✓</span>Minimap</div>
       </div>
     </div>
-    
-    <div class="menu-item" onclick="toggleSplit()">◫ Split Editor</div>
+
+    <div class="menu-item" id="go-menu-container" onclick="toggleMenu(event,'go-menu')">Go
+      <div class="dropdown" id="go-menu">
+        <div class="dropdown-item" onclick="goMenuBack()">Back <span>Alt+Left</span></div>
+        <div class="dropdown-item" onclick="goMenuForward()">Forward <span>Alt+Right</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="goMenuGoToLine()">Go to Line/Column... <span>Ctrl+G</span></div>
+        <div class="dropdown-item" onclick="goMenuGoToFile()">Go to File... <span>Ctrl+P</span></div>
+        <div class="dropdown-item" onclick="goMenuGoToDefinition()">Go to Definition <span>F12</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="goMenuNextProblem()">Next Problem <span>F8</span></div>
+        <div class="dropdown-item" onclick="goMenuPrevProblem()">Previous Problem <span>Shift+F8</span></div>
+      </div>
+    </div>
+
+    <div class="menu-item" id="run-menu-container" onclick="toggleMenu(event,'run-menu')">Run
+      <div class="dropdown" id="run-menu">
+        <div class="dropdown-item" onclick="terminalMenuRunActiveFile()">Run Active File <span>F5</span></div>
+        <div class="dropdown-item" onclick="terminalMenuRunSelectedText()">Run Selected Text</div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="runCode()">Run JS in Console</div>
+      </div>
+    </div>
+
+    <div class="menu-item" id="terminal-menu-container" onclick="toggleMenu(event,'terminal-menu')">Terminal
+      <div class="dropdown" id="terminal-menu">
+        <div class="dropdown-item" onclick="terminalMenuNewTerminal()">New Terminal <span>Ctrl+`</span></div>
+        <div class="dropdown-item" onclick="terminalMenuSplitTerminal()">Split Terminal <span>Ctrl+Shift+5</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="terminalMenuRunActiveFile()">Run Active File</div>
+        <div class="dropdown-item" onclick="terminalMenuRunSelectedText()">Run Selected Text</div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="terminalMenuClear()">Clear Terminal</div>
+        <div class="dropdown-item" onclick="terminalMenuKill()">Kill Terminal</div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="terminalMenuScrollUp()">Scroll Up <span>Shift+PgUp</span></div>
+        <div class="dropdown-item" onclick="terminalMenuScrollDown()">Scroll Down <span>Shift+PgDn</span></div>
+      </div>
+    </div>
+
+    <div class="menu-item" id="help-menu-container" onclick="toggleMenu(event,'help-menu')">Help
+      <div class="dropdown" id="help-menu">
+        <div class="dropdown-item" onclick="openPalette('?')">Show All Commands <span>Ctrl+Shift+P</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="helpMenuKeyboardShortcuts()">Keyboard Shortcuts <span>Ctrl+K Ctrl+S</span></div>
+        <div class="divider"></div>
+        <div class="dropdown-item" onclick="helpMenuAbout()">About</div>
+      </div>
+    </div>
   </div>
+
+  <!-- Center search / palette -->
   <div class="titlebar-center">
-  <div id="command-palette" class="palette-overlay" style="display: none;">
-    <div class="palette-container">
-      <div class="palette-input-wrapper">
-        <input type="text" id="palette-input" placeholder="🔍 workspace" autocomplete="off" spellcheck="false">
+    <div id="command-palette" class="palette-overlay" style="display:none;">
+      <div class="palette-container">
+        <div class="palette-input-wrapper">
+          <input type="text" id="palette-input" placeholder="Search files or type a command..." autocomplete="off" spellcheck="false">
+        </div>
+        <ul id="palette-results"></ul>
       </div>
-      <ul id="palette-results"></ul>
+    </div>
+    <div id="search-bar-placeholder" class="search-bar" onclick="openPalette('')">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="opacity:.55;margin-right:7px;flex-shrink:0"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zM5.5 11a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/></svg>
+      <span id="search-bar-text">workspace</span>
     </div>
   </div>
-  
-  <div id="search-bar-placeholder" class="search-bar" onclick="openPalette('')">
-    🔍 workspace
+
+  <!-- Right controls -->
+  <div class="titlebar-right">
+    <div class="titlebar-btn" onclick="toggleSplit()" title="Split Editor">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3zm8.5-1v12H14a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H8.5zm-1 0H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h5.5V2z"/></svg>
+    </div>
+    <div class="titlebar-btn" onclick="window.toggleTerminal()" title="Toggle Terminal">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M6 9a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 6 9zM3.854 4.146a.5.5 0 1 0-.708.708L4.793 6.5 3.146 8.146a.5.5 0 1 0 .708.708l2-2a.5.5 0 0 0 0-.708l-2-2z"/><path d="M2 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2H2zm12 1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h12z"/></svg>
+    </div>
   </div>
 </div>
-</div>
 
+<!-- APP BODY -->
 <div class="app">
-  <div class="activity-bar">
-    <div class="activity-icon active" title="Explorer">📄</div>
-    <div class="activity-icon" title="Search">🔍</div>
-    <div class="activity-icon" title="Source Control">🌿</div>
-    <div class="activity-icon" style="margin-top: auto; margin-bottom: 10px;" title="Settings">⚙️</div>
-  </div>
 
-  <div class="sidebar" id="sidebar">
-    <div class="sidebar-header">EXPLORER</div>
-    <div id="fileTree">
-      <button class="open-folder-btn" onclick="openFolder()">Open Folder</button>
+  <!-- Activity Bar -->
+  <div class="activity-bar">
+    <div class="activity-icon active" title="Explorer">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+    </div>
+    <div class="activity-icon" title="Search" onclick="openPalette('')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </div>
+    <div class="activity-icon" title="Source Control">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+    </div>
+    <div class="activity-icon" title="Extensions">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    </div>
+    <div class="activity-icon activity-icon-bottom" title="Settings">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </div>
   </div>
 
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span>EXPLORER</span>
+      <div class="sidebar-actions">
+        <div class="sidebar-action-btn" title="New File" onclick="createFile()">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M9 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5L9 1zm0 1.5L12.5 5H9V2.5zM7.5 6.5v2h-2v1h2v2h1v-2h2v-1h-2v-2h-1z"/></svg>
+        </div>
+        <div class="sidebar-action-btn" title="New Folder">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 3l.04.87a2 2 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H13.17a2 2 0 0 0 1.991-1.819l.637-7A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2zm7 5.5v-2h-2v-1h2v-2h1v2h2v1h-2v2h-1z"/></svg>
+        </div>
+        <div class="sidebar-action-btn" title="Refresh Explorer" onclick="refreshTree && refreshTree()">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+        </div>
+      </div>
+    </div>
+    <div id="fileTree">
+      <div class="welcome-view">
+        <div class="welcome-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <button class="open-folder-btn" onclick="openFolder()">Open Folder</button>
+      </div>
+    </div>
+  </div>
+  <div id="sidebar-resize-handle"></div>
+
+  <!-- Main editor area -->
   <div class="app-main">
     <div id="tabs"></div>
-    
-   <div class="editor-layout">
+    <div id="breadcrumb" class="breadcrumb"></div>
+
+    <div class="editor-layout">
       <div id="editor1" class="editor-pane active-pane"></div>
-      <div id="editor2" class="editor-pane" style="display: none;"></div>
-      
-      <div id="preview-pane" class="editor-pane" style="display: none; flex-direction: column; background: #ffffff;">
+      <div id="editor2" class="editor-pane" style="display:none;"></div>
+      <div id="preview-pane" class="editor-pane" style="display:none; flex-direction:column; background:#fff;">
         <div class="preview-header">
-          <span>🌐 Live Preview</span>
-          <span class="close-preview" onclick="closePreview()">✖</span>
+          <div class="preview-header-left">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>Live Preview</span>
+          </div>
+          <span class="close-preview" onclick="closePreview()" title="Close">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+          </span>
         </div>
-        <iframe id="live-iframe" allow="cross-origin-isolated"></iframe>
+        <iframe id="live-iframe" sandbox="allow-scripts"></iframe>
       </div>
     </div>
-    
-    <div id="terminal-container" style="display: flex; flex-direction: column; flex: 1;">
+
+    <div id="terminal-resize-handle"></div>
+    <div id="terminal-container">
       <div id="terminal-tabs">
-        <span class="term-tab">TERMINAL</span>
-        <span class="term-tab inactive-tab">OUTPUT</span>
+        <span class="term-tab" id="tab-terminal" onclick="switchTerminalTab('terminal')">TERMINAL</span>
+        <span class="term-tab inactive-tab" id="tab-output" onclick="switchTerminalTab('output')">OUTPUT</span>
+        <div class="term-tab-actions">
+          <!-- Font size controls -->
+          <div class="term-font-controls">
+            <div class="term-action-btn" title="Decrease Font Size" onclick="terminalFontSize(-1)">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/></svg>
+            </div>
+            <span id="term-font-label" style="font-size:11px;color:var(--text-muted);min-width:24px;text-align:center;cursor:default;" title="Font size">13</span>
+            <div class="term-action-btn" title="Increase Font Size" onclick="terminalFontSize(1)">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/></svg>
+            </div>
+          </div>
+          <div class="term-divider-v"></div>
+          <div class="term-action-btn" title="New Terminal" onclick="terminalMenuNewTerminal()">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/></svg>
+          </div>
+          <div class="term-action-btn" title="Kill Terminal" onclick="terminalMenuKill()">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+          </div>
+          <div class="term-action-btn" title="Clear Terminal" onclick="terminalMenuClear()">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1z"/></svg>
+          </div>
+        </div>
       </div>
-      
-      <div id="terminal-output" style="flex: 1; padding: 10px; overflow: hidden; background: var(--bg-darker);"></div>
+      <div id="terminal-output" style="flex:1; padding:6px 10px; overflow:hidden; background:var(--terminal-bg);"></div>
+      <div id="output-log" style="display:none; flex:1; padding:8px 12px; overflow-y:auto; background:var(--terminal-bg); font-family:'Cascadia Code',Consolas,monospace; font-size:13px; color:var(--text-main);"></div>
     </div>
   </div>
 </div>
 
+<!-- FIND IN FILES PANEL -->
+<div id="find-in-files-panel" class="fif-panel" style="display:none;">
+  <div class="fif-header">
+    <span class="fif-title">SEARCH</span>
+    <div class="fif-header-actions">
+      <div class="fif-icon-btn" title="Collapse All Results" onclick="fifCollapseAll()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 4.5A.5.5 0 0 1 1.5 4h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 4.5zm0 5A.5.5 0 0 1 1.5 9h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 9zm0 5a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5z"/></svg>
+      </div>
+      <div class="fif-icon-btn" title="Clear Results" onclick="fifClear()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+      </div>
+      <div class="fif-icon-btn" title="Close" onclick="closeFindInFiles()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="fif-inputs">
+    <div class="fif-input-row">
+      <div class="fif-input-wrap">
+        <input id="fif-query" type="text" class="fif-input" placeholder="Search" autocomplete="off" spellcheck="false" oninput="fifOnInput()" onkeydown="fifKeyDown(event)">
+        <div class="fif-input-btns">
+          <div class="fif-toggle-btn" id="fif-btn-case" title="Match Case (Alt+C)" onclick="fifToggle('case')" data-active="false">Aa</div>
+          <div class="fif-toggle-btn" id="fif-btn-word" title="Match Whole Word (Alt+W)" onclick="fifToggle('word')" data-active="false">ab</div>
+          <div class="fif-toggle-btn" id="fif-btn-regex" title="Use Regular Expression (Alt+R)" onclick="fifToggle('regex')" data-active="false">.*</div>
+        </div>
+      </div>
+    </div>
+    <div class="fif-input-row">
+      <div class="fif-input-wrap">
+        <input id="fif-replace" type="text" class="fif-input" placeholder="Replace" autocomplete="off" spellcheck="false" onkeydown="fifReplaceKeyDown(event)">
+        <div class="fif-input-btns">
+          <div class="fif-toggle-btn" title="Replace All" onclick="fifReplaceAll()" style="font-size:10px;padding:0 5px;width:auto;">All</div>
+        </div>
+      </div>
+    </div>
+    <div class="fif-input-row">
+      <input id="fif-include" type="text" class="fif-input" placeholder="files to include (e.g. *.js, src/)" autocomplete="off" spellcheck="false" oninput="fifDebounceSearch()">
+    </div>
+    <div class="fif-meta" id="fif-meta"></div>
+  </div>
+
+  <div id="fif-results" class="fif-results"></div>
+</div>
+
+<!-- STATUS BAR -->
 <div class="status-bar">
   <div class="status-left">
-    <span class="status-item status-blue">>&lt;</span>
-    <span class="status-item">main*</span>
-    <span class="status-item">⊗ 0 ⚠ 0</span>
+    <span class="status-item status-remote" title="Remote">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    </span>
+    <span class="status-item status-branch">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-right:3px"><path fill-rule="evenodd" d="M11.75 2.5a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0zm.75 1.992a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5zM4.25 13.5a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0zM5 15.492a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5zM5 3.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0zm.75 1.992a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5zM10.5 9.25A1.5 1.5 0 0 0 9 7.75V6.5h-1.5V9a3 3 0 0 0 3 3v1.5H12V12a3 3 0 0 1-1.5-2.75z"/></svg>
+      main
+    </span>
+    <span class="status-item">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-right:2px"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v4M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>0
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-left:4px;margin-right:2px"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="M7.1 5a.9.9 0 1 1 1.8 0l-.35 3.507a.55.55 0 0 1-1.1 0L7.1 5zM7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0z"/></svg>0
+    </span>
   </div>
   <div class="status-right">
     <span class="status-item" id="cursor-position">Ln 1, Col 1</span>
-    <span class="status-item" id="status-lang">JavaScript</span>
     <span class="status-item">UTF-8</span>
-    <span class="status-item" style="cursor: pointer;" onclick="formatCode()">Prettier</span>
+    <span class="status-item">CRLF</span>
+    <span class="status-item" id="status-lang">JavaScript</span>
+    <span class="status-item status-prettier" onclick="formatCode()" title="Format Document (Shift+Alt+F)">Prettier</span>
   </div>
 </div>
 
-<div id="context-menu" class="context-menu">
-  <div class="dropdown-item" onclick="renameContextItem()">Rename</div>
-  <div class="dropdown-item" onclick="deleteContextItem()" style="color: #f48771;">Delete</div>
-</div>
+<div id="context-menu" class="context-menu"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/umd.js"></script>
-
 <script src="https://unpkg.com/prettier@3.2.5/standalone.js"></script>
 <script src="https://unpkg.com/prettier@3.2.5/plugins/estree.js"></script>
 <script src="https://unpkg.com/prettier@3.2.5/plugins/babel.js"></script>
 <script src="https://unpkg.com/prettier@3.2.5/plugins/html.js"></script>
 <script src="https://unpkg.com/prettier@3.2.5/plugins/postcss.js"></script>
-
 <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
 <script src="script.js"></script>
 </body>
