@@ -91,7 +91,7 @@
         <div class="dropdown-item" onclick="viewMenuResetZoom()">Reset Zoom <span>Ctrl+0</span></div>
         <div class="divider"></div>
         <div class="dropdown-item" onclick="viewMenuWordWrap()"><span class="menu-check" id="wordwrap-check" style="opacity:0">✓</span>Word Wrap <span>Alt+Z</span></div>
-        <div class="dropdown-item" onclick="viewMenuMinimap()"><span class="menu-check" id="minimap-check" style="opacity:0">✓</span>Minimap</div>
+        <div class="dropdown-item" onclick="viewMenuMinimap()"><span class="menu-check" id="minimap-check" style="opacity:1">✓</span>Minimap</div>
       </div>
     </div>
 
@@ -136,7 +136,7 @@
 
     <div class="menu-item" id="help-menu-container" onclick="toggleMenu(event,'help-menu')">Help
       <div class="dropdown" id="help-menu">
-        <div class="dropdown-item" onclick="openPalette('?')">Show All Commands <span>Ctrl+Shift+P</span></div>
+        <div class="dropdown-item" onclick="openPalette('>')">Show All Commands <span>Ctrl+Shift+P</span></div>
         <div class="divider"></div>
         <div class="dropdown-item" onclick="helpMenuKeyboardShortcuts()">Keyboard Shortcuts <span>Ctrl+K Ctrl+S</span></div>
         <div class="divider"></div>
@@ -180,7 +180,7 @@
     <div class="activity-icon active" title="Explorer">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
     </div>
-    <div class="activity-icon" title="Search" onclick="openPalette('')">
+    <div class="activity-icon" title="Search" onclick="openFindInFiles()">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     </div>
     <div class="activity-icon" title="Source Control">
@@ -189,7 +189,7 @@
     <div class="activity-icon" title="Extensions">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
     </div>
-    <div class="activity-icon activity-icon-bottom" title="Settings">
+    <div class="activity-icon activity-icon-bottom" title="Settings" onclick="openSettings()">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </div>
   </div>
@@ -202,7 +202,7 @@
         <div class="sidebar-action-btn" title="New File" onclick="createFile()">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M9 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5L9 1zm0 1.5L12.5 5H9V2.5zM7.5 6.5v2h-2v1h2v2h1v-2h2v-1h-2v-2h-1z"/></svg>
         </div>
-        <div class="sidebar-action-btn" title="New Folder">
+        <div class="sidebar-action-btn" title="New Folder" onclick="ctxNewFolderFromSidebar()">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 3l.04.87a2 2 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H13.17a2 2 0 0 0 1.991-1.819l.637-7A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2zm7 5.5v-2h-2v-1h2v-2h1v2h2v1h-2v2h-1z"/></svg>
         </div>
         <div class="sidebar-action-btn" title="Refresh Explorer" onclick="refreshTree && refreshTree()">
@@ -347,6 +347,174 @@
 </div>
 
 <div id="context-menu" class="context-menu"></div>
+
+<!-- UPDATE BANNER -->
+<div id="update-banner" class="update-banner" style="display:none;">
+  <div class="update-banner-inner">
+    <span>🔄 Update available — reload to get the latest version.</span>
+    <button onclick="window.applyUpdate&&applyUpdate()">Reload</button>
+    <button class="update-dismiss" onclick="this.closest('.update-banner').style.display='none'">✕</button>
+  </div>
+</div>
+
+<!-- THEME PICKER OVERLAY -->
+<div id="theme-picker-overlay" class="theme-picker-overlay" onclick="if(event.target===this)closeThemePicker(false)">
+  <div class="theme-picker-modal">
+    <div class="theme-picker-header">
+      <span>Color Theme</span>
+      <kbd>↑↓ Navigate &nbsp;·&nbsp; Enter Select &nbsp;·&nbsp; Esc Cancel</kbd>
+    </div>
+    <div class="theme-picker-search-wrap">
+      <input type="text" id="theme-search" class="theme-picker-search" placeholder="Search themes…" autocomplete="off" spellcheck="false" oninput="filterThemes(this.value)">
+    </div>
+    <ul id="theme-list" class="theme-list"></ul>
+  </div>
+</div>
+
+<!-- SETTINGS OVERLAY -->
+<div id="settings-overlay" class="settings-overlay" onclick="if(event.target===this)closeSettings()">
+  <div class="settings-modal">
+    <div class="settings-header">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span style="flex:1">Settings</span>
+      <button class="settings-reset-btn" onclick="resetSettings()" title="Restore all settings to their default values">↺ Reset to Defaults</button>
+      <button class="settings-close-btn" onclick="closeSettings()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+      </button>
+    </div>
+    <div class="settings-body">
+
+      <div class="settings-section-title">Appearance</div>
+
+      <div class="settings-row">
+        <div class="settings-label">
+          <span>Color Theme</span>
+          <span class="settings-desc">Controls the color theme for the entire workbench.</span>
+        </div>
+        <div class="settings-control">
+          <button class="settings-action-btn" onclick="closeSettings();setTimeout(openThemePicker,150)">
+            <span id="settings-theme-name">Dark+ (default)</span>
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" style="opacity:.5"><path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-section-title" style="margin-top:20px">Editor</div>
+
+      <div class="settings-row">
+        <div class="settings-label"><span>Font Size</span><span class="settings-desc">Controls the font size in pixels.</span></div>
+        <div class="settings-control">
+          <input type="range" id="setting-font-size" min="8" max="28" step="1" value="14" oninput="settingFontSize(this.value)" class="settings-slider">
+          <span id="setting-font-size-label" class="settings-value-label">14</span>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-label"><span>Tab Size</span><span class="settings-desc">Number of spaces a tab is equal to.</span></div>
+        <div class="settings-control">
+          <div class="settings-btn-group">
+            <button class="settings-btn-opt" id="tabsize-2" onclick="settingTabSize(2)">2</button>
+            <button class="settings-btn-opt active" id="tabsize-4" onclick="settingTabSize(4)">4</button>
+            <button class="settings-btn-opt" id="tabsize-8" onclick="settingTabSize(8)">8</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-label"><span>Font Family</span><span class="settings-desc">Controls the font family used in the editor.</span></div>
+        <div class="settings-control">
+          <select id="setting-font-family" onchange="settingFontFamily(this.value)" class="settings-select">
+            <option value="'Cascadia Code','Fira Code',Consolas,monospace">Cascadia Code</option>
+            <option value="'JetBrains Mono',Consolas,monospace">JetBrains Mono</option>
+            <option value="'Fira Code',Consolas,monospace">Fira Code</option>
+            <option value="Consolas,monospace">Consolas</option>
+            <option value="'Courier New',monospace">Courier New</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-label"><span>Word Wrap</span><span class="settings-desc">Controls how lines should wrap.</span></div>
+        <div class="settings-control">
+          <label class="settings-toggle"><input type="checkbox" id="setting-word-wrap" onchange="settingWordWrap(this.checked)"><span class="settings-toggle-track"></span></label>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-label"><span>Minimap</span><span class="settings-desc">Show a minimap overview of the file.</span></div>
+        <div class="settings-control">
+          <label class="settings-toggle"><input type="checkbox" id="setting-minimap" onchange="settingMinimap(this.checked)" checked><span class="settings-toggle-track"></span></label>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-label"><span>Line Numbers</span><span class="settings-desc">Controls the display of line numbers.</span></div>
+        <div class="settings-control">
+          <div class="settings-btn-group">
+            <button class="settings-btn-opt active" id="linenums-on" onclick="settingLineNumbers('on')">On</button>
+            <button class="settings-btn-opt" id="linenums-relative" onclick="settingLineNumbers('relative')">Relative</button>
+            <button class="settings-btn-opt" id="linenums-off" onclick="settingLineNumbers('off')">Off</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-label"><span>Cursor Style</span><span class="settings-desc">Controls the cursor appearance.</span></div>
+        <div class="settings-control">
+          <select id="setting-cursor" onchange="settingCursor(this.value)" class="settings-select">
+            <option value="line">Line</option>
+            <option value="block">Block</option>
+            <option value="underline">Underline</option>
+            <option value="line-thin">Thin Line</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-section-title" style="margin-top:20px">Files</div>
+
+      <div class="settings-row">
+        <div class="settings-label"><span>Auto Save</span><span class="settings-desc">Automatically save files after changes.</span></div>
+        <div class="settings-control">
+          <label class="settings-toggle"><input type="checkbox" id="setting-auto-save" onchange="settingAutoSave(this.checked)" checked><span class="settings-toggle-track"></span></label>
+        </div>
+      </div>
+
+      <div class="settings-section-title" style="margin-top:20px">Terminal</div>
+
+      <div class="settings-row">
+        <div class="settings-label"><span>Terminal Font Size</span><span class="settings-desc">Controls the font size of the integrated terminal.</span></div>
+        <div class="settings-control">
+          <input type="range" id="setting-term-font-size" min="8" max="24" step="1" value="13" oninput="settingTermFontSize(this.value)" class="settings-slider">
+          <span id="setting-term-font-size-label" class="settings-value-label">13</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ABOUT OVERLAY -->
+<div id="about-overlay" class="about-overlay" onclick="if(event.target===this)closeAbout()">
+  <div class="about-modal">
+    <button class="settings-close-btn" onclick="closeAbout()" style="position:absolute;top:14px;right:14px">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+    </button>
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.2" style="margin-bottom:12px"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    <div class="about-title">VS Code Online</div>
+    <div class="about-version">Version 1.0.0</div>
+    <div class="about-desc">A browser-based IDE powered by Monaco Editor &amp; WebContainers.</div>
+    <div class="about-shortcuts">
+      <div class="about-shortcut-row"><kbd>Ctrl+P</kbd><span>Go to file</span></div>
+      <div class="about-shortcut-row"><kbd>Ctrl+Shift+P</kbd><span>Command palette</span></div>
+      <div class="about-shortcut-row"><kbd>Ctrl+K T</kbd><span>Change theme</span></div>
+      <div class="about-shortcut-row"><kbd>Ctrl+Shift+F</kbd><span>Find in files</span></div>
+      <div class="about-shortcut-row"><kbd>Shift+Alt+F</kbd><span>Format document</span></div>
+      <div class="about-shortcut-row"><kbd>Ctrl+S</kbd><span>Save file</span></div>
+      <div class="about-shortcut-row"><kbd>Ctrl+B</kbd><span>Toggle sidebar</span></div>
+      <div class="about-shortcut-row"><kbd>Ctrl+`</kbd><span>New terminal</span></div>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/umd.js"></script>
 <script src="https://unpkg.com/prettier@3.2.5/standalone.js"></script>

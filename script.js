@@ -100,7 +100,7 @@ function viewMenuWordWrap() {
   if (check) check.style.opacity = wordWrapEnabled ? '1' : '0';
 }
 
-let minimapEnabled = false;
+let minimapEnabled = true;
 function viewMenuMinimap() {
   minimapEnabled = !minimapEnabled;
   editor1?.updateOptions({ minimap: { enabled: minimapEnabled } });
@@ -120,9 +120,227 @@ function goMenuPrevProblem()   { activeEditor?.trigger('menu', 'editor.action.ma
 
 /* ── Help Menu ───────────────────────────────────────────────── */
 function helpMenuKeyboardShortcuts() { openPalette('>keyboard '); }
-function helpMenuAbout() {
-  alert('VS Code Online\nBuilt with Monaco Editor + WebContainer\n\nKeyboard shortcuts:\nCtrl+P — Go to file\nCtrl+Shift+P — Command palette\nCtrl+S — Save\nShift+Alt+F — Format document\nCtrl+` — New terminal');
+function helpMenuAbout() { openAbout(); }
+
+function openAbout() {
+  const overlay = document.getElementById('about-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => overlay.classList.add('visible'));
 }
+function closeAbout() {
+  const overlay = document.getElementById('about-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  setTimeout(() => { overlay.style.display = 'none'; }, 200);
+}
+window.openAbout  = openAbout;
+window.closeAbout = closeAbout;
+
+/* =========================================
+   SETTINGS SYSTEM
+   ========================================= */
+const SETTING_DEFAULTS = {
+  fontSize:   14,
+  tabSize:    4,
+  fontFamily: "'Cascadia Code','Fira Code',Consolas,monospace",
+  wordWrap:   false,
+  minimap:    true,
+  lineNumbers:'on',
+  cursorStyle:'line',
+  autoSave:   true,
+  termFontSize: 13,
+};
+
+function loadSettings() {
+  const saved = JSON.parse(localStorage.getItem('editorSettings') || '{}');
+  return { ...SETTING_DEFAULTS, ...saved };
+}
+function saveSettings(patch) {
+  const cur = loadSettings();
+  localStorage.setItem('editorSettings', JSON.stringify({ ...cur, ...patch }));
+}
+
+function initSettings() {
+  const s = loadSettings();
+
+  // Font size
+  editor1?.updateOptions({ fontSize: s.fontSize });
+  editor2?.updateOptions({ fontSize: s.fontSize });
+
+  // Tab size
+  editor1?.getModel()?.updateOptions({ tabSize: s.tabSize });
+  editor2?.getModel()?.updateOptions({ tabSize: s.tabSize });
+
+  // Font family
+  editor1?.updateOptions({ fontFamily: s.fontFamily });
+  editor2?.updateOptions({ fontFamily: s.fontFamily });
+
+  // Word wrap
+  const wrap = s.wordWrap ? 'on' : 'off';
+  editor1?.updateOptions({ wordWrap: wrap });
+  editor2?.updateOptions({ wordWrap: wrap });
+  wordWrapEnabled = s.wordWrap;
+  const wc = document.getElementById('wordwrap-check');
+  if (wc) wc.style.opacity = s.wordWrap ? '1' : '0';
+
+  // Minimap
+  editor1?.updateOptions({ minimap: { enabled: s.minimap } });
+  editor2?.updateOptions({ minimap: { enabled: s.minimap } });
+  minimapEnabled = s.minimap;
+  const mc = document.getElementById('minimap-check');
+  if (mc) mc.style.opacity = s.minimap ? '1' : '0';
+
+  // Line numbers
+  editor1?.updateOptions({ lineNumbers: s.lineNumbers });
+  editor2?.updateOptions({ lineNumbers: s.lineNumbers });
+
+  // Cursor
+  editor1?.updateOptions({ cursorStyle: s.cursorStyle });
+  editor2?.updateOptions({ cursorStyle: s.cursorStyle });
+
+  // Auto save
+  autoSaveEnabled = s.autoSave;
+  const ac = document.getElementById('autosave-check');
+  if (ac) ac.style.opacity = s.autoSave ? '1' : '0';
+
+  // Terminal font size
+  if (typeof termFontSize !== 'undefined') {
+    termFontSize = s.termFontSize;
+    const label = document.getElementById('term-font-label');
+    if (label) label.textContent = s.termFontSize;
+  }
+}
+
+function syncSettingsUI() {
+  const s = loadSettings();
+  const theme = THEMES.find(t => t.id === activeThemeId);
+  const tn = document.getElementById('settings-theme-name');
+  if (tn) tn.textContent = theme ? theme.label : activeThemeId;
+
+  const fsEl = document.getElementById('setting-font-size');
+  if (fsEl) { fsEl.value = s.fontSize; document.getElementById('setting-font-size-label').textContent = s.fontSize; }
+
+  [2, 4, 8].forEach(n => {
+    const btn = document.getElementById(`tabsize-${n}`);
+    if (btn) btn.classList.toggle('active', s.tabSize === n);
+  });
+
+  const ffEl = document.getElementById('setting-font-family');
+  if (ffEl) ffEl.value = s.fontFamily;
+
+  const wwEl = document.getElementById('setting-word-wrap');
+  if (wwEl) wwEl.checked = s.wordWrap;
+
+  const mmEl = document.getElementById('setting-minimap');
+  if (mmEl) mmEl.checked = s.minimap;
+
+  ['on', 'relative', 'off'].forEach(v => {
+    const btn = document.getElementById(`linenums-${v}`);
+    if (btn) btn.classList.toggle('active', s.lineNumbers === v);
+  });
+
+  const csEl = document.getElementById('setting-cursor');
+  if (csEl) csEl.value = s.cursorStyle;
+
+  const asEl = document.getElementById('setting-auto-save');
+  if (asEl) asEl.checked = s.autoSave;
+
+  const tfsEl = document.getElementById('setting-term-font-size');
+  if (tfsEl) { tfsEl.value = s.termFontSize; document.getElementById('setting-term-font-size-label').textContent = s.termFontSize; }
+}
+
+window.openSettings = function() {
+  const overlay = document.getElementById('settings-overlay');
+  if (!overlay) return;
+  syncSettingsUI();
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+};
+window.closeSettings = function() {
+  const overlay = document.getElementById('settings-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  setTimeout(() => { overlay.style.display = 'none'; }, 200);
+};
+
+window.resetSettings = function() {
+  localStorage.removeItem('editorSettings');
+  applyTheme('vs-dark', true);
+  initSettings();
+  syncSettingsUI();
+  printToOutput('Settings reset to defaults.', '#858585');
+};
+
+// ── Individual setting handlers ──
+window.settingFontSize = function(v) {
+  const n = parseInt(v);
+  editor1?.updateOptions({ fontSize: n });
+  editor2?.updateOptions({ fontSize: n });
+  const lbl = document.getElementById('setting-font-size-label');
+  if (lbl) lbl.textContent = n;
+  saveSettings({ fontSize: n });
+};
+window.settingTabSize = function(n) {
+  editor1?.getModel()?.updateOptions({ tabSize: n });
+  editor2?.getModel()?.updateOptions({ tabSize: n });
+  [2, 4, 8].forEach(x => {
+    const btn = document.getElementById(`tabsize-${x}`);
+    if (btn) btn.classList.toggle('active', x === n);
+  });
+  saveSettings({ tabSize: n });
+};
+window.settingFontFamily = function(v) {
+  editor1?.updateOptions({ fontFamily: v });
+  editor2?.updateOptions({ fontFamily: v });
+  saveSettings({ fontFamily: v });
+};
+window.settingWordWrap = function(checked) {
+  const wrap = checked ? 'on' : 'off';
+  editor1?.updateOptions({ wordWrap: wrap });
+  editor2?.updateOptions({ wordWrap: wrap });
+  wordWrapEnabled = checked;
+  const wc = document.getElementById('wordwrap-check');
+  if (wc) wc.style.opacity = checked ? '1' : '0';
+  saveSettings({ wordWrap: checked });
+};
+window.settingMinimap = function(checked) {
+  editor1?.updateOptions({ minimap: { enabled: checked } });
+  editor2?.updateOptions({ minimap: { enabled: checked } });
+  minimapEnabled = checked;
+  const mc = document.getElementById('minimap-check');
+  if (mc) mc.style.opacity = checked ? '1' : '0';
+  saveSettings({ minimap: checked });
+};
+window.settingLineNumbers = function(v) {
+  editor1?.updateOptions({ lineNumbers: v });
+  editor2?.updateOptions({ lineNumbers: v });
+  ['on', 'relative', 'off'].forEach(x => {
+    const btn = document.getElementById(`linenums-${x}`);
+    if (btn) btn.classList.toggle('active', x === v);
+  });
+  saveSettings({ lineNumbers: v });
+};
+window.settingCursor = function(v) {
+  editor1?.updateOptions({ cursorStyle: v });
+  editor2?.updateOptions({ cursorStyle: v });
+  saveSettings({ cursorStyle: v });
+};
+window.settingAutoSave = function(checked) {
+  autoSaveEnabled = checked;
+  const ac = document.getElementById('autosave-check');
+  if (ac) ac.style.opacity = checked ? '1' : '0';
+  saveSettings({ autoSave: checked });
+};
+window.settingTermFontSize = function(v) {
+  const n = parseInt(v);
+  const lbl = document.getElementById('setting-term-font-size-label');
+  if (lbl) lbl.textContent = n;
+  if (window.term) { window.term.options.fontSize = n; window.fitAddon?.fit(); }
+  const tl = document.getElementById('term-font-label');
+  if (tl) tl.textContent = n;
+  saveSettings({ termFontSize: n });
+};
 
 
 let autoSaveEnabled = true; // default on (matches VS Code default)
@@ -954,12 +1172,16 @@ require(["vs/editor/editor.main"], function () {
     language: "javascript",
     theme: "vs-dark",
     automaticLayout: true,
-    minimap: { enabled: false },
+    minimap: { enabled: true },
     contextmenu: false  // disable Monaco's built-in right-click menu
   };
   
   editor1 = monaco.editor.create(document.getElementById("editor1"), { value: "// Editor 1\n// Open a folder to start", ...commonConfig });
   editor2 = monaco.editor.create(document.getElementById("editor2"), { value: "// Editor 2", ...commonConfig });
+
+  // Sync minimap check mark with default enabled state
+  const minimapCheck = document.getElementById('minimap-check');
+  if (minimapCheck) minimapCheck.style.opacity = '1';
 
   // Shift + Alt + F to Format
   editor1.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => window.formatCode());
@@ -1012,6 +1234,8 @@ require(["vs/editor/editor.main"], function () {
 
   // Apply saved theme (must run after Monaco is ready)
   initThemes();
+  // Apply saved editor settings
+  initSettings();
 });
 
 function triggerManualSave() {
@@ -2007,6 +2231,7 @@ function renderWelcomeScreen(storedHandle, recentFolders) {
    THEME SYSTEM
    ========================================= */
 
+// Shell vars applied to :root on theme switch — skins the entire IDE
 const THEMES = [
   {
     id: 'vs-dark',
@@ -2014,6 +2239,30 @@ const THEMES = [
     base: 'vs-dark',
     rules: [],
     colors: {},
+    shell: {
+      '--bg-app':         '#181818',
+      '--bg-editor':      '#1e1e1e',
+      '--bg-sidebar':     '#181818',
+      '--bg-activity':    '#181818',
+      '--bg-hover':       '#2a2d2e',
+      '--bg-active':      '#37373d',
+      '--bg-input':       '#3c3c3c',
+      '--terminal-bg':    '#181818',
+      '--border':         '#2b2b2b',
+      '--border-light':   '#3c3c3c',
+      '--accent':         '#007acc',
+      '--accent-hover':   '#1a8fdb',
+      '--accent-select':  '#094771',
+      '--text-main':      '#cccccc',
+      '--text-bright':    '#ffffff',
+      '--text-muted':     '#858585',
+      '--text-disabled':  '#5a5a5a',
+      '--palette-bg':     '#161616',
+      '--palette-border': '#333333',
+      '--palette-hover':  '#094771',
+      '--status-bg':      '#007acc',
+      '--status-fg':      '#ffffff',
+    },
   },
   {
     id: 'one-dark-pro',
@@ -2061,6 +2310,30 @@ const THEMES = [
       'editor.findMatchBackground': '#42557b',
       'editor.findMatchHighlightBackground': '#314365',
     },
+    shell: {
+      '--bg-app':         '#21252b',
+      '--bg-editor':      '#282c34',
+      '--bg-sidebar':     '#21252b',
+      '--bg-activity':    '#1e2127',
+      '--bg-hover':       '#2c313a',
+      '--bg-active':      '#2c313a',
+      '--bg-input':       '#1d1f23',
+      '--terminal-bg':    '#1e2127',
+      '--border':         '#181a1f',
+      '--border-light':   '#3e4451',
+      '--accent':         '#528bff',
+      '--accent-hover':   '#6b9fff',
+      '--accent-select':  '#1c3157',
+      '--text-main':      '#abb2bf',
+      '--text-bright':    '#ffffff',
+      '--text-muted':     '#636d83',
+      '--text-disabled':  '#4b5263',
+      '--palette-bg':     '#1d1f23',
+      '--palette-border': '#3e4451',
+      '--palette-hover':  '#1c3157',
+      '--status-bg':      '#528bff',
+      '--status-fg':      '#ffffff',
+    },
   },
   {
     id: 'dracula',
@@ -2103,6 +2376,30 @@ const THEMES = [
       'editorCursor.foreground': '#f8f8f2',
       'editor.findMatchBackground': '#ffb86c50',
       'editor.findMatchHighlightBackground': '#ffffff20',
+    },
+    shell: {
+      '--bg-app':         '#21222c',
+      '--bg-editor':      '#282a36',
+      '--bg-sidebar':     '#21222c',
+      '--bg-activity':    '#191a21',
+      '--bg-hover':       '#343746',
+      '--bg-active':      '#44475a',
+      '--bg-input':       '#191a21',
+      '--terminal-bg':    '#21222c',
+      '--border':         '#191a21',
+      '--border-light':   '#44475a',
+      '--accent':         '#bd93f9',
+      '--accent-hover':   '#caa4ff',
+      '--accent-select':  '#44475a',
+      '--text-main':      '#f8f8f2',
+      '--text-bright':    '#ffffff',
+      '--text-muted':     '#6272a4',
+      '--text-disabled':  '#4d5068',
+      '--palette-bg':     '#1e1f29',
+      '--palette-border': '#44475a',
+      '--palette-hover':  '#44475a',
+      '--status-bg':      '#bd93f9',
+      '--status-fg':      '#282a36',
     },
   },
   {
@@ -2147,6 +2444,30 @@ const THEMES = [
       'editor.findMatchBackground': '#3d59a150',
       'editor.findMatchHighlightBackground': '#3d59a130',
     },
+    shell: {
+      '--bg-app':         '#16161e',
+      '--bg-editor':      '#1a1b2e',
+      '--bg-sidebar':     '#16161e',
+      '--bg-activity':    '#13131a',
+      '--bg-hover':       '#1f2335',
+      '--bg-active':      '#24283b',
+      '--bg-input':       '#1a1b26',
+      '--terminal-bg':    '#16161e',
+      '--border':         '#1a1b2e',
+      '--border-light':   '#292e42',
+      '--accent':         '#7aa2f7',
+      '--accent-hover':   '#89b4fa',
+      '--accent-select':  '#283457',
+      '--text-main':      '#a9b1d6',
+      '--text-bright':    '#c0caf5',
+      '--text-muted':     '#565f89',
+      '--text-disabled':  '#414868',
+      '--palette-bg':     '#15161e',
+      '--palette-border': '#292e42',
+      '--palette-hover':  '#283457',
+      '--status-bg':      '#7aa2f7',
+      '--status-fg':      '#16161e',
+    },
   },
   {
     id: 'monokai',
@@ -2190,6 +2511,30 @@ const THEMES = [
       'editor.findMatchBackground': '#ffe79250',
       'editor.findMatchHighlightBackground': '#ffe79230',
     },
+    shell: {
+      '--bg-app':         '#1e1f1c',
+      '--bg-editor':      '#272822',
+      '--bg-sidebar':     '#1e1f1c',
+      '--bg-activity':    '#19191c',
+      '--bg-hover':       '#3e3d32',
+      '--bg-active':      '#49483e',
+      '--bg-input':       '#1e1f1c',
+      '--terminal-bg':    '#1e1f1c',
+      '--border':         '#1e1f1c',
+      '--border-light':   '#49483e',
+      '--accent':         '#a6e22e',
+      '--accent-hover':   '#b8f53e',
+      '--accent-select':  '#3d3c31',
+      '--text-main':      '#f8f8f2',
+      '--text-bright':    '#f8f8f0',
+      '--text-muted':     '#90908a',
+      '--text-disabled':  '#5c5c52',
+      '--palette-bg':     '#1e1f1c',
+      '--palette-border': '#49483e',
+      '--palette-hover':  '#3d3c31',
+      '--status-bg':      '#a6e22e',
+      '--status-fg':      '#1e1f1c',
+    },
   },
   {
     id: 'solarized-dark',
@@ -2228,6 +2573,30 @@ const THEMES = [
       'editorLineNumber.activeForeground': '#839496',
       'editorCursor.foreground': '#839496',
     },
+    shell: {
+      '--bg-app':         '#002b36',
+      '--bg-editor':      '#002b36',
+      '--bg-sidebar':     '#073642',
+      '--bg-activity':    '#002b36',
+      '--bg-hover':       '#0d4655',
+      '--bg-active':      '#0d4655',
+      '--bg-input':       '#003847',
+      '--terminal-bg':    '#002b36',
+      '--border':         '#073642',
+      '--border-light':   '#586e75',
+      '--accent':         '#268bd2',
+      '--accent-hover':   '#2fa0e6',
+      '--accent-select':  '#1b5e8e',
+      '--text-main':      '#839496',
+      '--text-bright':    '#eee8d5',
+      '--text-muted':     '#586e75',
+      '--text-disabled':  '#405050',
+      '--palette-bg':     '#002b36',
+      '--palette-border': '#586e75',
+      '--palette-hover':  '#1b5e8e',
+      '--status-bg':      '#268bd2',
+      '--status-fg':      '#fdf6e3',
+    },
   },
   {
     id: 'github-dark',
@@ -2265,17 +2634,198 @@ const THEMES = [
       'editorLineNumber.activeForeground': '#e6edf3',
       'editorCursor.foreground': '#58a6ff',
     },
+    shell: {
+      '--bg-app':         '#0d1117',
+      '--bg-editor':      '#0d1117',
+      '--bg-sidebar':     '#161b22',
+      '--bg-activity':    '#010409',
+      '--bg-hover':       '#21262d',
+      '--bg-active':      '#30363d',
+      '--bg-input':       '#0d1117',
+      '--terminal-bg':    '#0d1117',
+      '--border':         '#21262d',
+      '--border-light':   '#30363d',
+      '--accent':         '#58a6ff',
+      '--accent-hover':   '#79b8ff',
+      '--accent-select':  '#1f3f5b',
+      '--text-main':      '#e6edf3',
+      '--text-bright':    '#ffffff',
+      '--text-muted':     '#8b949e',
+      '--text-disabled':  '#484f58',
+      '--palette-bg':     '#090c10',
+      '--palette-border': '#30363d',
+      '--palette-hover':  '#1f3f5b',
+      '--status-bg':      '#1f6feb',
+      '--status-fg':      '#ffffff',
+    },
+  },
+
+  /* ── Light themes ───────────────────────────────────────────── */
+  {
+    id: 'vs-light',
+    label: 'Light+ (default)',
+    base: 'vs',
+    rules: [],
+    colors: {},
+    shell: {
+      '--bg-app':         '#f3f3f3',
+      '--bg-editor':      '#ffffff',
+      '--bg-sidebar':     '#f3f3f3',
+      '--bg-activity':    '#2c2c2c',
+      '--bg-hover':       '#e8e8e8',
+      '--bg-active':      '#e4e6f1',
+      '--bg-input':       '#e8e8e8',
+      '--terminal-bg':    '#ffffff',
+      '--border':         '#e8e8e8',
+      '--border-light':   '#c8c8c8',
+      '--accent':         '#007acc',
+      '--accent-hover':   '#1a8fdb',
+      '--accent-select':  '#cce5f7',
+      '--text-main':      '#333333',
+      '--text-bright':    '#000000',
+      '--text-muted':     '#717171',
+      '--text-disabled':  '#aaaaaa',
+      '--palette-bg':     '#f3f3f3',
+      '--palette-border': '#c8c8c8',
+      '--palette-hover':  '#cce5f7',
+      '--status-bg':      '#007acc',
+      '--status-fg':      '#ffffff',
+    },
+  },
+  {
+    id: 'solarized-light',
+    label: 'Solarized Light',
+    base: 'vs',
+    rules: [
+      { token: '', foreground: '657b83' },
+      { token: 'comment', foreground: '93a1a1', fontStyle: 'italic' },
+      { token: 'string', foreground: '2aa198' },
+      { token: 'string.template', foreground: '2aa198' },
+      { token: 'constant.numeric', foreground: 'd33682' },
+      { token: 'constant.language', foreground: 'cb4b16' },
+      { token: 'keyword', foreground: '859900' },
+      { token: 'keyword.control', foreground: '268bd2' },
+      { token: 'keyword.operator', foreground: '859900' },
+      { token: 'entity.name.function', foreground: '268bd2' },
+      { token: 'entity.name.class', foreground: 'cb4b16' },
+      { token: 'entity.name.tag', foreground: '268bd2' },
+      { token: 'entity.other.attribute', foreground: '93a1a1' },
+      { token: 'support.function', foreground: '2aa198' },
+      { token: 'type', foreground: 'b58900' },
+      { token: 'variable', foreground: '657b83' },
+      { token: 'number', foreground: 'd33682' },
+      { token: 'regexp', foreground: '2aa198' },
+      { token: 'operator', foreground: '859900' },
+      { token: 'tag', foreground: '268bd2' },
+      { token: 'attribute.name', foreground: '93a1a1' },
+      { token: 'attribute.value', foreground: '2aa198' },
+    ],
+    colors: {
+      'editor.background': '#fdf6e3',
+      'editor.foreground': '#657b83',
+      'editor.lineHighlightBackground': '#eee8d5',
+      'editor.selectionBackground': '#d3cbb8',
+      'editorLineNumber.foreground': '#93a1a1',
+      'editorLineNumber.activeForeground': '#657b83',
+      'editorCursor.foreground': '#657b83',
+    },
+    shell: {
+      '--bg-app':         '#eee8d5',
+      '--bg-editor':      '#fdf6e3',
+      '--bg-sidebar':     '#eee8d5',
+      '--bg-activity':    '#657b83',
+      '--bg-hover':       '#ddd6c0',
+      '--bg-active':      '#d3cbb8',
+      '--bg-input':       '#ddd6c0',
+      '--terminal-bg':    '#fdf6e3',
+      '--border':         '#d3cbb8',
+      '--border-light':   '#c5b9a4',
+      '--accent':         '#268bd2',
+      '--accent-hover':   '#2fa0e6',
+      '--accent-select':  '#b3d6f0',
+      '--text-main':      '#657b83',
+      '--text-bright':    '#002b36',
+      '--text-muted':     '#93a1a1',
+      '--text-disabled':  '#b0b8b8',
+      '--palette-bg':     '#eee8d5',
+      '--palette-border': '#c5b9a4',
+      '--palette-hover':  '#b3d6f0',
+      '--status-bg':      '#268bd2',
+      '--status-fg':      '#fdf6e3',
+    },
+  },
+  {
+    id: 'github-light',
+    label: 'GitHub Light',
+    base: 'vs',
+    rules: [
+      { token: '', foreground: '24292e' },
+      { token: 'comment', foreground: '6a737d', fontStyle: 'italic' },
+      { token: 'string', foreground: '032f62' },
+      { token: 'constant.numeric', foreground: '005cc5' },
+      { token: 'constant.language', foreground: '005cc5' },
+      { token: 'keyword', foreground: 'd73a49' },
+      { token: 'keyword.control', foreground: 'd73a49' },
+      { token: 'keyword.operator', foreground: '24292e' },
+      { token: 'entity.name.function', foreground: '6f42c1' },
+      { token: 'entity.name.class', foreground: 'e36209' },
+      { token: 'entity.name.tag', foreground: '22863a' },
+      { token: 'entity.other.attribute', foreground: '005cc5' },
+      { token: 'support.function', foreground: '6f42c1' },
+      { token: 'type', foreground: 'e36209' },
+      { token: 'variable', foreground: 'e36209' },
+      { token: 'number', foreground: '005cc5' },
+      { token: 'regexp', foreground: '032f62' },
+      { token: 'operator', foreground: '24292e' },
+      { token: 'tag', foreground: '22863a' },
+      { token: 'attribute.name', foreground: '005cc5' },
+      { token: 'attribute.value', foreground: '032f62' },
+    ],
+    colors: {
+      'editor.background': '#ffffff',
+      'editor.foreground': '#24292e',
+      'editor.lineHighlightBackground': '#f6f8fa',
+      'editor.selectionBackground': '#c8e1ff',
+      'editorLineNumber.foreground': '#c6cdd5',
+      'editorLineNumber.activeForeground': '#24292e',
+      'editorCursor.foreground': '#24292e',
+    },
+    shell: {
+      '--bg-app':         '#f6f8fa',
+      '--bg-editor':      '#ffffff',
+      '--bg-sidebar':     '#f6f8fa',
+      '--bg-activity':    '#24292e',
+      '--bg-hover':       '#eaeef2',
+      '--bg-active':      '#dde1e6',
+      '--bg-input':       '#eaeef2',
+      '--terminal-bg':    '#ffffff',
+      '--border':         '#e1e4e8',
+      '--border-light':   '#cdd3d9',
+      '--accent':         '#0366d6',
+      '--accent-hover':   '#0476f5',
+      '--accent-select':  '#c8e1ff',
+      '--text-main':      '#24292e',
+      '--text-bright':    '#000000',
+      '--text-muted':     '#6a737d',
+      '--text-disabled':  '#b0b8c0',
+      '--palette-bg':     '#f6f8fa',
+      '--palette-border': '#cdd3d9',
+      '--palette-hover':  '#c8e1ff',
+      '--status-bg':      '#0366d6',
+      '--status-fg':      '#ffffff',
+    },
   },
 ];
 
 let activeThemeId = localStorage.getItem('editorTheme') || 'vs-dark';
 let _themePickerIndex = 0;
 let _filteredThemes = [...THEMES];
-let _previewThemeId = null; // theme being previewed before confirmed
+let _previewThemeId = null;
 
 function initThemes() {
   THEMES.forEach(theme => {
-    if (theme.id === 'vs-dark') return; // already built-in
+    // vs-dark and vs (light) are Monaco built-ins — don't redefine them
+    if (theme.id === 'vs-dark' || theme.id === 'vs-light') return;
     monaco.editor.defineTheme(theme.id, {
       base: theme.base,
       inherit: true,
@@ -2288,8 +2838,28 @@ function initThemes() {
 
 function applyTheme(id, save = true) {
   const theme = THEMES.find(t => t.id === id) || THEMES[0];
-  monaco.editor.setTheme(theme.id);
+  // vs-light maps to Monaco built-in 'vs'
+  const monacoId = theme.id === 'vs-light' ? 'vs' : theme.id;
+  monaco.editor.setTheme(monacoId);
   activeThemeId = theme.id;
+
+  // Apply shell CSS variables to the entire IDE
+  const root = document.documentElement;
+  if (theme.shell) {
+    Object.entries(theme.shell).forEach(([k, v]) => root.style.setProperty(k, v));
+  }
+
+  // Update status bar colour from theme
+  const statusBar = document.querySelector('.status-bar');
+  if (statusBar && theme.shell) {
+    statusBar.style.background = theme.shell['--status-bg'] || '';
+    statusBar.style.color      = theme.shell['--status-fg'] || '';
+  }
+
+  // Update settings panel theme name display
+  const tn = document.getElementById('settings-theme-name');
+  if (tn) tn.textContent = theme.label;
+
   if (save) {
     localStorage.setItem('editorTheme', theme.id);
     printToOutput(`Theme: ${theme.label}`, '#858585');
@@ -2313,7 +2883,6 @@ window.closeThemePicker = function(confirm = false) {
   const overlay = document.getElementById('theme-picker-overlay');
   if (!overlay) return;
   if (!confirm && _previewThemeId) {
-    // Restore original theme on cancel
     applyTheme(_previewThemeId, false);
   }
   overlay.classList.remove('visible');
@@ -2325,11 +2894,18 @@ function renderThemeList() {
   if (!list) return;
   list.innerHTML = '';
   _filteredThemes.forEach((theme, i) => {
+    const edBg  = theme.colors?.['editor.background'] || (theme.shell?.['--bg-editor']) || '#1e1e1e';
+    const edFg  = theme.colors?.['editor.foreground'] || (theme.shell?.['--text-main']) || '#cccccc';
+    const sideBg = theme.shell?.['--bg-sidebar'] || '#181818';
+    const accent = theme.shell?.['--accent'] || '#007acc';
     const li = document.createElement('li');
     li.className = 'theme-item' + (i === _themePickerIndex ? ' selected' : '') + (theme.id === activeThemeId ? ' active' : '');
     li.innerHTML = `
-      <span class="theme-swatch" style="background:${theme.colors?.['editor.background'] || '#1e1e1e'}">
-        <span style="color:${theme.colors?.['editor.foreground'] || '#cccccc'};font-size:9px;font-family:monospace">Aa</span>
+      <span class="theme-swatch" style="background:${sideBg};border:1px solid ${theme.shell?.['--border']||'#333'}">
+        <span style="display:flex;gap:2px;align-items:center">
+          <span style="width:3px;height:22px;background:${accent};border-radius:1px;flex-shrink:0"></span>
+          <span style="color:${edFg};font-size:9px;font-family:monospace;background:${edBg};flex:1;height:22px;display:flex;align-items:center;padding-left:3px">Aa</span>
+        </span>
       </span>
       <span class="theme-label">${theme.label}</span>
       ${theme.id === activeThemeId ? '<span class="theme-check">✓</span>' : ''}
@@ -2341,17 +2917,28 @@ function renderThemeList() {
       closeThemePicker(true);
     };
     li.onmouseenter = () => {
-      // Live preview on hover
-      monaco.editor.setTheme(theme.id);
+      const monacoId = theme.id === 'vs-light' ? 'vs' : theme.id;
+      monaco.editor.setTheme(monacoId);
+      if (theme.shell) {
+        Object.entries(theme.shell).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
+        const sb = document.querySelector('.status-bar');
+        if (sb) { sb.style.background = theme.shell['--status-bg']||''; sb.style.color = theme.shell['--status-fg']||''; }
+      }
     };
     li.onmouseleave = () => {
-      // Restore current selection on leave
       const sel = _filteredThemes[_themePickerIndex];
-      if (sel) monaco.editor.setTheme(sel.id);
+      if (sel) {
+        const mId = sel.id === 'vs-light' ? 'vs' : sel.id;
+        monaco.editor.setTheme(mId);
+        if (sel.shell) {
+          Object.entries(sel.shell).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
+          const sb = document.querySelector('.status-bar');
+          if (sb) { sb.style.background = sel.shell['--status-bg']||''; sb.style.color = sel.shell['--status-fg']||''; }
+        }
+      }
     };
     list.appendChild(li);
   });
-  // Scroll selected item into view
   const sel = list.querySelector('.selected');
   if (sel) sel.scrollIntoView({ block: 'nearest' });
 }
@@ -2371,22 +2958,21 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault();
   if (e.key === 'ArrowDown') {
     _themePickerIndex = Math.min(_filteredThemes.length - 1, _themePickerIndex + 1);
-    const theme = _filteredThemes[_themePickerIndex];
-    if (theme) monaco.editor.setTheme(theme.id);
+    const t = _filteredThemes[_themePickerIndex];
+    if (t) { const mId = t.id === 'vs-light' ? 'vs' : t.id; monaco.editor.setTheme(mId); if(t.shell){Object.entries(t.shell).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));} }
     renderThemeList();
   } else if (e.key === 'ArrowUp') {
     _themePickerIndex = Math.max(0, _themePickerIndex - 1);
-    const theme = _filteredThemes[_themePickerIndex];
-    if (theme) monaco.editor.setTheme(theme.id);
+    const t = _filteredThemes[_themePickerIndex];
+    if (t) { const mId = t.id === 'vs-light' ? 'vs' : t.id; monaco.editor.setTheme(mId); if(t.shell){Object.entries(t.shell).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));} }
     renderThemeList();
   } else if (e.key === 'Enter') {
-    const theme = _filteredThemes[_themePickerIndex];
-    if (theme) { applyTheme(theme.id); closeThemePicker(true); }
+    const t = _filteredThemes[_themePickerIndex];
+    if (t) { applyTheme(t.id); closeThemePicker(true); }
   } else if (e.key === 'Escape') {
     closeThemePicker(false);
   }
 });
-
 /* PRETTIER FORMATTER */
 window.formatCode = async function() {
   const currentFile = activeEditor === editor1 ? currentFile1 : currentFile2;
@@ -2659,6 +3245,10 @@ document.addEventListener('keydown', (e) => {
       e.preventDefault();
       closePalette();
     }
+    const settingsOverlay = document.getElementById('settings-overlay');
+    if (settingsOverlay && settingsOverlay.style.display === 'flex') { e.preventDefault(); window.closeSettings(); }
+    const aboutOverlay = document.getElementById('about-overlay');
+    if (aboutOverlay && aboutOverlay.style.display === 'flex') { e.preventDefault(); closeAbout(); }
     closeContextMenu();
   }
 
