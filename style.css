@@ -590,6 +590,18 @@ details[open] > div { border-left-color: rgba(255,255,255,.05); }
 .tab:hover .close, .tab.active .close { opacity: 1; }
 .tab .close:hover { color: var(--text-bright); background: rgba(255,255,255,.15); }
 
+/* Parent-directory label shown on tabs when two files share the same name */
+.tab-dir {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.65;
+  margin-left: 4px;
+  font-style: normal;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tab.active .tab-dir { opacity: 0.55; }
+
 /* ================================================================
    BREADCRUMB
    ================================================================ */
