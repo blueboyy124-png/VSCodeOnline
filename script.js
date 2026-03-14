@@ -14,9 +14,11 @@ let webcontainerInstance = null;
 let termDataDisposable = null;
 let termResizeDisposable = null;
 let isSyncingFile = false; // Suppresses fs.watch tree refresh during our own programmatic saves
-let previewMode = null;   // 'srcdoc' | 'server' — tracks what the preview iframe is showing
-let _previewBlobUrl = null; // current blob URL so we can revoke it before creating a new one
+let previewMode = null;         // 'srcdoc' | 'server' — tracks what the preview iframe is showing
+let _previewBlobUrl = null;     // current blob URL so we can revoke it before creating a new one
 let _previewUpdateTimer = null; // debounce timer for updatePreviewIfOpen
+let _previewTabActive = false;  // true when preview tab is the focused tab
+let _previewSourceFile = null;  // the file path that was previewed (for refresh on tab return)
 
 /* ================================================================
    WINDOW CONTROLS OVERLAY — PWA title bar integration
@@ -46,6 +48,8 @@ function toggleSidebar() {
 }
 
 function toggleSplit() {
+  // If preview is active, close it first so editors are in a known state
+  if (previewMode) closePreview();
   const ed2 = document.getElementById("editor2");
   if (ed2.style.display === "none") {
     ed2.style.display = "block";
@@ -408,7 +412,20 @@ async function fileMenuSaveAs() {
     if (activeEditor === editor1) currentFile1 = newPath;
     else currentFile2 = newPath;
 
-    await refreshTree();
+    // Also mount in WebContainer so dev server sees the file
+    if (webcontainerInstance) {
+      try {
+        await webcontainerInstance.fs.writeFile(toContainerPath(newPath), content);
+      } catch { /* ignore */ }
+    }
+    const _saTreeRoot = document.getElementById('tree-root');
+    if (_saTreeRoot) {
+      if (webcontainerInstance && projectFolder) {
+        await refreshVirtualTree(`/${projectFolder.name}`, _saTreeRoot);
+      } else {
+        await refreshTree();
+      }
+    }
     refreshFileCache();
     renderTabs();
     printToOutput(`Saved as: ${newName}`, '#89d185');
@@ -453,16 +470,29 @@ function fileMenuCloseEditor() {
 function fileMenuCloseFolder() {
   if (!projectFolder) return;
   if (!confirm('Close this folder? Unsaved changes will be lost.')) return;
+
+  // Stop preview before clearing state
+  if (previewMode) closePreview();
+
   projectFolder = null;
   openFiles = {};
   cachedWorkspaceFiles = [];
   currentFile1 = null; currentFile2 = null;
+  webcontainerInstance = null; // clear so next openFolder() boots fresh
+
   const _sbClose = document.getElementById('search-bar-text');
   if (_sbClose) _sbClose.textContent = 'workspace';
   isProgrammaticEdit = true;
   editor1.setValue('// Open a folder to start');
   editor2.setValue('');
   isProgrammaticEdit = false;
+
+  // Make sure editor panes are visible again
+  document.getElementById('editor1').style.display = '';
+  const _cfEd2 = document.getElementById('editor2');
+  if (_cfEd2) { _cfEd2.style.display = 'none'; delete _cfEd2.dataset.wasVisible; }
+  activeEditor = editor1;
+
   renderTabs();
   const treeRoot = document.getElementById('tree-root');
   if (treeRoot) treeRoot.innerHTML = '';
@@ -815,15 +845,20 @@ async function ctxNewFile() {
   try {
     if (virtual) {
       const targetPath = type === 'directory' ? fullPath : (parentPath || fullPath.substring(0, fullPath.lastIndexOf('/')));
-      // Duplicate check — scan the target directory for an existing entry with that name
+      // Duplicate check
       try {
         const existing = await webcontainerInstance.fs.readdir(targetPath);
-        if (existing.includes(name)) {
-          alert(`'${name}' already exists in this directory.`);
-          return;
-        }
-      } catch { /* target dir unreadable — proceed and let writeFile handle it */ }
+        if (existing.includes(name)) { alert(`'${name}' already exists in this directory.`); return; }
+      } catch { /* target dir unreadable — proceed */ }
       await webcontainerInstance.fs.writeFile(`${targetPath}/${name}`, '');
+      // Also create on real disk so the file persists across reloads
+      const _dp = await resolveDiskParent(`${targetPath}/${name}`);
+      if (_dp) {
+        try {
+          const _fh = await _dp.dirHandle.getFileHandle(name, { create: true });
+          const _w = await _fh.createWritable(); await _w.write(''); await _w.close();
+        } catch { /* disk create failed — file will still exist in WebContainer */ }
+      }
       const treeRoot = document.getElementById('tree-root');
       if (treeRoot) { await refreshVirtualTree(`/${projectFolder.name}`, treeRoot); }
     } else {
@@ -835,8 +870,37 @@ async function ctxNewFile() {
       if (_exists) { alert(`'${name}' already exists in this directory.`); return; }
       const fh = await targetDir.getFileHandle(name, { create: true });
       const w = await fh.createWritable(); await w.write(''); await w.close();
+      // Also create in WebContainer so dev server sees the new file
+      if (webcontainerInstance && projectFolder) {
+        try {
+          const newFilePath = type === 'directory'
+            ? `${fullPath}/${name}`
+            : (fullPath.includes('/') ? `${fullPath.substring(0, fullPath.lastIndexOf('/'))}/${name}` : name);
+          const cPath = toContainerPath(newFilePath);
+          // Ensure parent dirs exist
+          const segs = cPath.split('/').slice(0, -1);
+          let d = '';
+          for (const seg of segs) {
+            if (!seg) continue; d += '/' + seg;
+            try { await webcontainerInstance.fs.readdir(d); }
+            catch { try { await webcontainerInstance.fs.mkdir(d); } catch {} }
+          }
+          await webcontainerInstance.fs.writeFile(cPath, '');
+        } catch { /* ignore */ }
+      }
       await refreshTree(); refreshFileCache();
-      const newPath = type === 'directory' ? `${fullPath}/${name}` : `${fullPath.substring(0, fullPath.lastIndexOf('/'))}/${name}`;
+      // Build the file's path relative to the project root (no project-name prefix).
+      // When the user right-clicks the root folder, fullPath === projectFolder.name
+      // which would produce "projectName/filename" — strip that prefix so saveFile
+      // doesn't double it when building the container path.
+      let _rawPath = type === 'directory'
+        ? `${fullPath}/${name}`
+        : (fullPath.includes('/') ? `${fullPath.substring(0, fullPath.lastIndexOf('/'))}/${name}` : name);
+      // Strip leading project-folder-name segment if present (root-folder context menu case)
+      if (projectFolder && _rawPath.startsWith(projectFolder.name + '/')) {
+        _rawPath = _rawPath.slice(projectFolder.name.length + 1);
+      }
+      const newPath = _rawPath;
       openFile(newPath, fh);
     }
     printToOutput(`Created: ${name}`, '#89d185');
@@ -850,15 +914,17 @@ async function ctxNewFolder() {
   try {
     if (virtual) {
       const targetPath = type === 'directory' ? fullPath : (parentPath || fullPath.substring(0, fullPath.lastIndexOf('/')));
-      // Duplicate check
       try {
         const existing = await webcontainerInstance.fs.readdir(targetPath);
-        if (existing.includes(name)) {
-          alert(`'${name}' already exists in this directory.`);
-          return;
-        }
+        if (existing.includes(name)) { alert(`'${name}' already exists in this directory.`); return; }
       } catch {}
       await webcontainerInstance.fs.mkdir(`${targetPath}/${name}`);
+      // Also create on real disk
+      const _ddp = await resolveDiskParent(`${targetPath}/${name}`);
+      if (_ddp) {
+        try { await _ddp.dirHandle.getDirectoryHandle(name, { create: true }); }
+        catch { /* disk create failed — folder still exists in WebContainer */ }
+      }
       const treeRoot = document.getElementById('tree-root');
       if (treeRoot) { await refreshVirtualTree(`/${projectFolder.name}`, treeRoot); }
     } else {
@@ -908,13 +974,23 @@ async function ctxPaste() {
 
   try {
     if (clipboardItem.virtual) {
-      // Virtual → virtual paste via WebContainer fs
       const targetPath = dest.type === 'directory' ? dest.fullPath : (dest.parentPath || dest.fullPath.substring(0, dest.fullPath.lastIndexOf('/')));
-      const content = await webcontainerInstance.fs.readFile(clipboardItem.fullPath, 'utf-8');
-      await webcontainerInstance.fs.writeFile(`${targetPath}/${pastedName}`, content);
+      const _pcContent = await webcontainerInstance.fs.readFile(clipboardItem.fullPath, 'utf-8');
+      await webcontainerInstance.fs.writeFile(`${targetPath}/${pastedName}`, _pcContent);
       if (clipboardItem.isCut) {
         await webcontainerInstance.fs.rm(clipboardItem.fullPath);
+        // Also remove cut source from disk
+        const _cdp = await resolveDiskParent(clipboardItem.fullPath);
+        if (_cdp) { try { await _cdp.dirHandle.removeEntry(_cdp.name); } catch {} }
         clipboardItem = null;
+      }
+      // Also paste to real disk
+      const _pdp = await resolveDiskParent(`${targetPath}/${pastedName}`);
+      if (_pdp) {
+        try {
+          const _pfh = await _pdp.dirHandle.getFileHandle(pastedName, { create: true });
+          const _pw = await _pfh.createWritable(); await _pw.write(_pcContent); await _pw.close();
+        } catch { /* disk paste failed */ }
       }
       const treeRoot = document.getElementById('tree-root');
       if (treeRoot) { await refreshVirtualTree(`/${projectFolder.name}`, treeRoot); }
@@ -950,9 +1026,25 @@ function ctxCopyRelativePath() {
 
 async function refreshTree() {
   const treeRoot = document.getElementById('tree-root');
-  if (treeRoot && projectFolder) {
-    treeRoot.innerHTML = '';
-    await renderFileTree(projectFolder, treeRoot);
+  if (!treeRoot || !projectFolder) return;
+  // Save which real-tree folders are open (by their fullPath label text)
+  const openFolders = new Set();
+  treeRoot.querySelectorAll('details[open]').forEach(d => {
+    const label = d.querySelector('summary span:last-child');
+    if (label) openFolders.add(label.textContent.trim());
+  });
+  treeRoot.innerHTML = '';
+  await renderFileTree(projectFolder, treeRoot);
+  // Re-open previously open folders by matching folder name
+  if (openFolders.size > 0) {
+    treeRoot.querySelectorAll('details').forEach(d => {
+      const label = d.querySelector('summary span:last-child');
+      if (label && openFolders.has(label.textContent.trim())) {
+        d.setAttribute('open', '');
+        // Trigger the toggle to load children
+        d.dispatchEvent(new Event('toggle'));
+      }
+    });
   }
 }
 
@@ -964,10 +1056,23 @@ async function deleteContextItem() {
   try {
     if (virtual) {
       await webcontainerInstance.fs.rm(fullPath, { recursive: true });
+      // Also delete from real disk so the file doesn't ghost back on refreshTree
+      const _dp = await resolveDiskParent(fullPath);
+      if (_dp) {
+        try { await _dp.dirHandle.removeEntry(_dp.name, { recursive: type === 'directory' }); }
+        catch { /* file might not exist on disk yet — ignore */ }
+      }
       const treeRoot = document.getElementById('tree-root');
       if (treeRoot) { await refreshVirtualTree(`/${projectFolder.name}`, treeRoot); }
     } else {
       await parentHandle.removeEntry(name, { recursive: type === 'directory' });
+      // Also remove from WebContainer so the dev server doesn't serve stale files
+      if (webcontainerInstance && projectFolder) {
+        try {
+          const cPath = toContainerPath(fullPath);
+          await webcontainerInstance.fs.rm(cPath, { recursive: true });
+        } catch { /* container may not have this file — safe to ignore */ }
+      }
       await refreshTree(); refreshFileCache();
     }
     if(openFiles[fullPath]) {
@@ -994,6 +1099,7 @@ async function deleteContextItem() {
       renderTabs();
     }
     printToOutput(`Deleted: ${name}`, '#89d185');
+    printToTerminal(`> Deleted: ${name}`, '#89d185');
   } catch(e) {
     printToTerminal(`[Error] Deleting: ${e.message}`, '#f48771');
   }
@@ -1008,12 +1114,21 @@ async function renameContextItem() {
 
   try {
     if (virtual) {
-      const parentPath = fullPath.substring(0, fullPath.lastIndexOf('/'));
-      const newPath = `${parentPath}/${newName}`;
+      const _rParent = fullPath.substring(0, fullPath.lastIndexOf('/'));
+      const newPath = `${_rParent}/${newName}`;
       if (type === 'file') {
-        const content = await webcontainerInstance.fs.readFile(fullPath, 'utf-8');
-        await webcontainerInstance.fs.writeFile(newPath, content);
+        const _rContent = await webcontainerInstance.fs.readFile(fullPath, 'utf-8');
+        await webcontainerInstance.fs.writeFile(newPath, _rContent);
         await webcontainerInstance.fs.rm(fullPath);
+        // Also rename on real disk
+        const _rdp = await resolveDiskParent(fullPath);
+        if (_rdp) {
+          try {
+            const _rfh = await _rdp.dirHandle.getFileHandle(newName, { create: true });
+            const _rw = await _rfh.createWritable(); await _rw.write(_rContent); await _rw.close();
+            await _rdp.dirHandle.removeEntry(_rdp.name);
+          } catch { /* disk rename failed — only renamed in WebContainer */ }
+        }
         if (openFiles[fullPath]) {
           openFiles[newPath] = { ...openFiles[fullPath] };
           delete openFiles[fullPath];
@@ -1022,7 +1137,7 @@ async function renameContextItem() {
           renderTabs();
         }
       } else {
-        printToTerminal('[System] Renaming folders in the virtual tree is not yet supported.', '#f48771');
+        printToTerminal('[System] Renaming folders is not yet supported.', '#f48771');
         return;
       }
       const treeRoot = document.getElementById('tree-root');
@@ -1038,6 +1153,16 @@ async function renameContextItem() {
       const writable = await newHandle.createWritable();
       await writable.write(content); await writable.close();
       await parentHandle.removeEntry(name);
+      // Sync rename to WebContainer
+      if (webcontainerInstance && projectFolder) {
+        try {
+          const oldCPath = toContainerPath(fullPath);
+          const newPathForContainer = fullPath.substring(0, fullPath.lastIndexOf('/') + 1) + newName;
+          const newCPath = toContainerPath(newPathForContainer);
+          await webcontainerInstance.fs.writeFile(newCPath, content);
+          await webcontainerInstance.fs.rm(oldCPath);
+        } catch { /* container may not have this file */ }
+      }
       if(openFiles[fullPath]) {
         const newPath = fullPath.substring(0, fullPath.lastIndexOf('/') + 1) + newName;
         openFiles[newPath] = { handle: newHandle, content, unsaved: openFiles[fullPath].unsaved };
@@ -1048,6 +1173,7 @@ async function renameContextItem() {
       await refreshTree(); refreshFileCache(); renderTabs();
     }
     printToOutput(`Renamed '${name}' → '${newName}'`, '#89d185');
+    printToTerminal(`> Renamed: ${name} → ${newName}`, '#89d185');
   } catch(e) {
     printToTerminal(`[Error] Renaming: ${e.message}`, '#f48771');
   }
@@ -1269,37 +1395,79 @@ function getFolderIcon(name, isOpen = false) {
 
 
 /* MONACO INIT (DUAL EDITORS) */
-// Configure language workers BEFORE require() so Monaco can spin them up on demand.
-// Without this, HTML/CSS/JSON auto-complete silently falls back to plain text mode.
-// Use getWorker (returns a real Worker via blob: URL) instead of getWorkerUrl.
-// getWorkerUrl with data: URLs is blocked in some browsers / by CSP.
-// Blob workers can freely call importScripts to any https: origin.
-window.MonacoEnvironment = {
-  getWorker: function(_moduleId, label) {
-    const base = 'https://unpkg.com/monaco-editor@0.45.0/min/vs';
-    const workerPaths = {
-      json:       `${base}/language/json/json.worker.js`,
-      css:        `${base}/language/css/css.worker.js`,
-      scss:       `${base}/language/css/css.worker.js`,
-      less:       `${base}/language/css/css.worker.js`,
-      html:       `${base}/language/html/html.worker.js`,
-      handlebars: `${base}/language/html/html.worker.js`,
-      razor:      `${base}/language/html/html.worker.js`,
-      typescript: `${base}/language/typescript/ts.worker.js`,
-      javascript: `${base}/language/typescript/ts.worker.js`,
-    };
-    const src = workerPaths[label] || `${base}/editor/editor.worker.js`;
-    // Blob: URLs are same-origin so importScripts can reach any https: URL
-    const blob = new Blob(
-      [`self.MonacoEnvironment={baseUrl:'${base}/'};importScripts('${src}');`],
-      { type: 'application/javascript' }
+// ── Worker strategy: pre-fetch on main thread, embed in blob URLs ─────────
+//
+// Every previous approach (importScripts from blob worker, SW proxy, XHR
+// shim) failed because:
+//   • Blob workers have "null" origin → importScripts to https:// is blocked
+//   • SW fetch handler cannot intercept fetches ORIGINATING from workers
+//     (only from Window/iframe clients), so the proxy never ran
+//   • Sync XHR inside a worker is deprecated and blocked in strict mode
+//
+// This approach works unconditionally:
+//   1. The main page fetches each worker script from unpkg.com BEFORE Monaco
+//      loads.  Main-page fetch has the page origin, so CORS succeeds.
+//   2. The text is wrapped in a Blob and a blob: URL is created.
+//   3. getWorkerUrl returns the blob URL (which already contains the code).
+//   4. Monaco does new Worker(blobUrl) — the worker starts with code already
+//      inside it.  No network request, no importScripts, no CORS issue.
+
+const _MONACO_CDN = 'https://unpkg.com/monaco-editor@0.45.0/min/vs';
+
+// Map every label Monaco might pass to getWorkerUrl → CDN URL
+const _workerSrcMap = {
+  json:       _MONACO_CDN + '/language/json/json.worker.js',
+  css:        _MONACO_CDN + '/language/css/css.worker.js',
+  scss:       _MONACO_CDN + '/language/css/css.worker.js',
+  less:       _MONACO_CDN + '/language/css/css.worker.js',
+  html:       _MONACO_CDN + '/language/html/html.worker.js',
+  handlebars: _MONACO_CDN + '/language/html/html.worker.js',
+  razor:      _MONACO_CDN + '/language/html/html.worker.js',
+  typescript: _MONACO_CDN + '/language/typescript/ts.worker.js',
+  javascript: _MONACO_CDN + '/language/typescript/ts.worker.js',
+  _default:   _MONACO_CDN + '/editor/editor.worker.js',
+};
+
+// Cache: CDN url → blob: URL containing the actual worker code
+const _workerBlobCache = {};
+
+async function _prefetchWorkerBlob(url) {
+  if (_workerBlobCache[url]) return;
+  try {
+    // cache:'no-store' tells the SW to skip this request (see sw.js).
+    // The browser fetches directly from the CDN, which returns proper CORS
+    // headers for Window-context requests — but not for SW-proxied ones.
+    const resp = await fetch(url, { mode: 'cors', cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const text = await resp.text();
+    _workerBlobCache[url] = URL.createObjectURL(
+      new Blob([text], { type: 'application/javascript' })
     );
-    return new Worker(URL.createObjectURL(blob));
+  } catch (e) {
+    console.warn('[Monaco] Worker prefetch failed for', url, e.message);
+    _workerBlobCache[url] = url; // last-resort: raw CDN URL
+  }
+}
+
+// Set MonacoEnvironment BEFORE require() so it is ready when Monaco first
+// needs a worker.  getWorkerUrl is synchronous; it just looks up the cache.
+window.MonacoEnvironment = {
+  getWorkerUrl: function (_moduleId, label) {
+    const src = _workerSrcMap[label] || _workerSrcMap._default;
+    // Return the pre-fetched blob URL (or raw CDN url as last-resort fallback)
+    return _workerBlobCache[src] || src;
   }
 };
 
-require.config({ paths: { vs: "https://unpkg.com/monaco-editor@0.45.0/min/vs" } });
-require(["vs/editor/editor.main"], function () {
+// De-duplicate: only fetch each unique URL once (ts/js share the same file)
+const _uniqueWorkerUrls = [...new Set(Object.values(_workerSrcMap))];
+
+// Fetch all workers first, then load Monaco.
+// Promise.allSettled never rejects, so a single failing prefetch won't block
+// the editor from loading.
+Promise.allSettled(_uniqueWorkerUrls.map(_prefetchWorkerBlob)).then(() => {
+  require.config({ paths: { vs: _MONACO_CDN } });
+  require(['vs/editor/editor.main'], function () {
   const commonConfig = {
     language: "javascript",
     theme: "vs-dark",
@@ -1385,7 +1553,8 @@ require(["vs/editor/editor.main"], function () {
   initThemes();
   // Apply saved editor settings
   initSettings();
-});
+  }); // end require(['vs/editor/editor.main'])
+}); // end Promise.allSettled worker prefetch
 
 function triggerManualSave() {
   const currentFile = activeEditor === editor1 ? currentFile1 : currentFile2;
@@ -1463,13 +1632,17 @@ document.addEventListener('mousedown', (e) => {
 /* OPEN FILE */
 async function openFile(fullPath, handle) {
   try {
-    // Check if Monaco Editor actually loaded
     if (!activeEditor) {
       printToTerminal("Error: Code editor failed to load. Are you using a local server?", "#f48771");
       return;
     }
 
-    if (openFiles[fullPath]) { switchTab(fullPath); return; }
+    if (openFiles[fullPath]) {
+      // File already open — switch to it, restoring editor if preview is active
+      if (_previewTabActive) await switchToFileTab(fullPath);
+      else await switchTab(fullPath);
+      return;
+    }
     
     const currentFile = activeEditor === editor1 ? currentFile1 : currentFile2;
     if (currentFile) {
@@ -1481,6 +1654,15 @@ async function openFile(fullPath, handle) {
     const text = await file.text();
     
     openFiles[fullPath] = { handle, content:text, unsaved: false };
+
+    // If preview is showing, hide it and restore editor panes
+    if (_previewTabActive) {
+      _previewTabActive = false;
+      document.getElementById('preview-pane').style.display = 'none';
+      document.getElementById('editor1').style.display = '';
+      const _ofe2 = document.getElementById('editor2');
+      if (_ofe2 && _ofe2.dataset.wasVisible === 'true') { _ofe2.style.display = ''; delete _ofe2.dataset.wasVisible; }
+    }
     
     if (activeEditor === editor1) currentFile1 = fullPath;
     else currentFile2 = fullPath;
@@ -1520,17 +1702,27 @@ async function createFile() {
     const writable = await fileHandle.createWritable();
     await writable.write("");
     await writable.close();
-    
-    // Refresh the UI
-    const treeRoot = document.getElementById("tree-root");
-    if (treeRoot) {
-      treeRoot.innerHTML = ""; 
-      await renderFileTree(projectFolder, treeRoot); 
+
+    // Also mount in WebContainer so the dev server sees the file immediately
+    if (webcontainerInstance) {
+      try {
+        const _cPath = toContainerPath(name);
+        await webcontainerInstance.fs.writeFile(_cPath, '');
+      } catch { /* ignore — WebContainer not ready */ }
     }
     
-    // Update the search cache so the new file shows up in Ctrl+P
-    refreshFileCache();
+    // Use virtual tree if WebContainer is running, otherwise real tree
+    const treeRoot = document.getElementById("tree-root");
+    if (treeRoot) {
+      if (webcontainerInstance && projectFolder) {
+        await refreshVirtualTree(`/${projectFolder.name}`, treeRoot);
+      } else {
+        treeRoot.innerHTML = "";
+        await renderFileTree(projectFolder, treeRoot);
+      }
+    }
     
+    refreshFileCache();
     printToTerminal(`Created file: ${name}`, "#89d185");
     openFile(name, fileHandle);
   } catch (err) {
@@ -1825,6 +2017,25 @@ window.addEventListener('resize', () => {
 
 
 
+// Walk the real disk tree from a virtual path like /projectName/src/style.css
+// Returns { dirHandle, name } or null if not found.
+// Used so virtual-mode explorer ops (delete/rename/create) also touch real disk.
+async function resolveDiskParent(virtualPath) {
+  if (!projectFolder) return null;
+  try {
+    let parts = virtualPath.replace(/^\//, '').split('/');
+    if (parts[0] === projectFolder.name) parts = parts.slice(1);
+    if (parts.length === 0) return null;
+    let dir = projectFolder;
+    for (let i = 0; i < parts.length - 1; i++) {
+      dir = await dir.getDirectoryHandle(parts[i]);
+    }
+    return { dirHandle: dir, name: parts[parts.length - 1] };
+  } catch {
+    return null; // path doesn't exist on disk — that's fine
+  }
+}
+
 /* RESOLVE REAL DISK HANDLE FROM VIRTUAL PATH
    Virtual files opened from the WebContainer tree have handle: null.
    This walks the real projectFolder using the file's path to get a
@@ -1848,6 +2059,27 @@ async function resolveRealHandle(path) {
 }
 
 /* MASTER SAVE */
+
+// Build the canonical WebContainer path for a file, handling both formats:
+//   • Real-disk paths:  "script.js"  or  "src/App.jsx"
+//   • Virtual paths:    "/website1/script.js"  (already include the project root)
+// Mixing them in the old formula `/${name}/${path}` doubled the project name
+// whenever a virtual-path file had its handle upgraded to a real handle.
+function toContainerPath(path) {
+  if (!projectFolder) return path;
+  const prefix = `/${projectFolder.name}/`;
+  if (path.startsWith(prefix)) return path;         // already /project/... — good
+  if (path.startsWith('/'))    return path;          // absolute but different root
+
+  // Strip bare project-name prefix if present.
+  // Happens when ctxNewFile is invoked from the root-folder context menu:
+  // fullPath === projectFolder.name, so newPath becomes "projectName/file.js".
+  // Without this, toContainerPath would produce "/projectName/projectName/file.js".
+  const barePrefix = projectFolder.name + '/';
+  const stripped   = path.startsWith(barePrefix) ? path.slice(barePrefix.length) : path;
+  return prefix + stripped;
+}
+
 async function saveFile(path, content) {
   try {
     const data = openFiles[path];
@@ -1871,7 +2103,18 @@ async function saveFile(path, content) {
 
         // Always also update WebContainer memory so the dev server hot-reloads
         if (webcontainerInstance) {
-          await webcontainerInstance.fs.writeFile(path, content);
+          // For virtual files the path already includes the container root (e.g. /project/src/x.js)
+          // Ensure parent dirs exist before writing
+          const vDirSegments = path.split('/').slice(0, -1);
+          let vDirSoFar = '';
+          for (const seg of vDirSegments) {
+            if (!seg) continue;
+            vDirSoFar += '/' + seg;
+            try { await webcontainerInstance.fs.readdir(vDirSoFar); }
+            catch { try { await webcontainerInstance.fs.mkdir(vDirSoFar); } catch {} }
+          }
+          // toContainerPath() is safe to call on virtual paths (they already have the prefix)
+          await webcontainerInstance.fs.writeFile(toContainerPath(path), content);
         }
 
         data.content = content;
@@ -1898,7 +2141,28 @@ async function saveFile(path, content) {
     if (webcontainerInstance) {
       try {
         isSyncingFile = true;
-        const containerPath = `/${projectFolder.name}/${path}`;
+        // toContainerPath() normalises both formats:
+        //   "script.js"            → "/website1/script.js"   (bare relative)
+        //   "/website1/script.js"  → "/website1/script.js"   (already qualified — no doubling)
+        // Without this, a virtual-path file whose handle got upgraded by resolveRealHandle
+        // would produce "/website1//website1/script.js" (ENOENT on every save).
+        const containerPath = toContainerPath(path);
+
+        // Ensure all parent directories exist in the container before writing.
+        // New files created on disk after the initial mount won't have their dirs yet.
+        const dirSegments = containerPath.split('/').slice(0, -1); // everything except filename
+        let dirSoFar = '';
+        for (const seg of dirSegments) {
+          if (!seg) continue; // leading slash produces an empty first segment
+          dirSoFar += '/' + seg;
+          try {
+            await webcontainerInstance.fs.readdir(dirSoFar);
+          } catch {
+            // Directory doesn't exist — create it
+            try { await webcontainerInstance.fs.mkdir(dirSoFar); } catch { /* already exists race */ }
+          }
+        }
+
         await webcontainerInstance.fs.writeFile(containerPath, content);
       } catch (wcErr) {
         console.warn("Could not sync file to WebContainer:", wcErr);
@@ -1916,11 +2180,13 @@ async function saveFile(path, content) {
 
 
 /* TABS */
+const PREVIEW_TAB_ID = '__preview__'; // sentinel key — never a real file path
+
 function renderTabs() {
   const tabs = document.getElementById("tabs");
   tabs.innerHTML = "";
 
-  // Detect duplicate filenames so we can show parent dir for disambiguation
+  // ── File tabs ──────────────────────────────────────────────────────────
   const allPaths = Object.keys(openFiles);
   const nameCounts = {};
   allPaths.forEach(p => {
@@ -1939,13 +2205,10 @@ function renderTabs() {
     const parts    = fullPath.split('/');
     const fileName = parts.pop();
     const isDupe   = nameCounts[fileName] > 1;
-    // Parent folder — skip project root name (parts[0]), use the immediate parent
     const parentDir = isDupe && parts.length > 0 ? parts[parts.length - 1] : null;
 
     const nameSpan = `<span class="tab-name" style="margin-left: 4px;">${fileName}</span>`;
-    const dirSpan  = parentDir
-      ? `<span class="tab-dir">${parentDir}</span>`
-      : '';
+    const dirSpan  = parentDir ? `<span class="tab-dir">${parentDir}</span>` : '';
     tab.innerHTML = getFileIcon(fileName) + nameSpan + dirSpan;
 
     const closeBtn = document.createElement("span");
@@ -1954,11 +2217,26 @@ function renderTabs() {
     closeBtn.onclick = (e) => { e.stopPropagation(); closeTab(fullPath); };
     tab.appendChild(closeBtn);
 
-    tab.onclick = () => switchTab(fullPath);
+    tab.onclick = () => switchToFileTab(fullPath);
     tabs.appendChild(tab);
   }
 
-  const hasTabs = allPaths.length > 0;
+  // ── Preview tab (shown only when preview is open) ──────────────────────
+  if (previewMode) {
+    const pvTab = document.createElement("div");
+    pvTab.className = "tab preview-tab" + (_previewTabActive ? " active" : "");
+    pvTab.title = "Live Preview";
+    pvTab.innerHTML = `<span class="preview-tab-icon">🌐</span><span class="tab-name" style="margin-left:4px;">Preview</span>`;
+    const pvClose = document.createElement("span");
+    pvClose.textContent = "×";
+    pvClose.className = "close";
+    pvClose.onclick = (e) => { e.stopPropagation(); closePreview(); };
+    pvTab.appendChild(pvClose);
+    pvTab.onclick = () => switchToPreviewTab();
+    tabs.appendChild(pvTab);
+  }
+
+  const hasTabs = allPaths.length > 0 || !!previewMode;
   tabs.classList.toggle('tabs-visible', hasTabs);
   updateBreadcrumb();
 }
@@ -1999,12 +2277,52 @@ async function verifyPermission(fileHandle, readWrite) {
   if ((await fileHandle.requestPermission(options)) === 'granted') return true;
   return false;
 }
+// ── Tab switching helpers ──────────────────────────────────────────────────
+// switchToFileTab: activate a file tab, hide preview pane, show editor
+async function switchToFileTab(fullPath) {
+  _previewTabActive = false;
+  const previewPane = document.getElementById('preview-pane');
+  if (previewPane) previewPane.style.display = 'none';
+  // Restore editor panes
+  const ed1el = document.getElementById('editor1');
+  if (ed1el) ed1el.style.display = '';
+  const ed2el = document.getElementById('editor2');
+  // Only restore editor2 if it was visible before preview (split mode)
+  if (ed2el && ed2el.dataset.wasVisible === 'true') {
+    ed2el.style.display = '';
+    delete ed2el.dataset.wasVisible;
+  }
+  await switchTab(fullPath);
+}
+
+// switchToPreviewTab: activate the preview tab, show preview pane
+function switchToPreviewTab() {
+  if (!previewMode) return;
+  _previewTabActive = true;
+  const previewPane = document.getElementById('preview-pane');
+  if (previewPane) previewPane.style.display = 'flex';
+  // Hide editor panes so preview takes the full area
+  document.getElementById('editor1').style.display = 'none';
+  const _se2 = document.getElementById('editor2');
+  if (_se2) _se2.style.display = 'none';
+  renderTabs();
+  // If preview is srcdoc, refresh in case the file changed while on another tab
+  if (previewMode === 'srcdoc') {
+    const fileToPreview = _previewSourceFile;
+    if (fileToPreview && openFiles[fileToPreview]) {
+      const isJs = fileToPreview.endsWith('.js');
+      _applyPreviewSrcdoc(openFiles[fileToPreview].content, isJs);
+    }
+  }
+}
+
 async function switchTab(fullPath){
-  // NEW: Guard to prevent crashes if Monaco hasn't loaded
   if (!activeEditor) {
     printToTerminal("Hold on! The editor is still loading in the background.", "#cbcb41");
     return;
   }
+  // Guard: file may have been deleted/skipped during session restore
+  if (!openFiles[fullPath]) return;
 
   if (activeEditor === editor1 && currentFile1 === fullPath) return; 
   if (activeEditor === editor2 && currentFile2 === fullPath) return; 
@@ -2078,6 +2396,10 @@ async function closeTab(fullPath){
     isProgrammaticEdit = false;
   }
   
+  // If the closed file was the preview source, detach it (preview stays open
+  // but will no longer auto-refresh on edits)
+  if (fullPath === _previewSourceFile) _previewSourceFile = null;
+
   renderTabs();
   saveWorkspaceState();
   document.getElementById("cursor-position").innerText = "Ln 1, Col 1";
@@ -2142,22 +2464,39 @@ function switchTerminalTab(tab) {
 
 function runCode(){
   const currentFile = activeEditor === editor1 ? currentFile1 : currentFile2;
-  // Guard: must have a file open, and it must be a .js file
-  if (!currentFile) {
-    printToTerminal("Error: No file is open.", "#f48771");
+  if (!currentFile) { printToTerminal("Error: No file is open.", "#f48771"); return; }
+  const ext = currentFile.split('.').pop().toLowerCase();
+  // Prefer running via the WebContainer terminal (node/python/etc.)
+  if (webcontainerInstance && shellWriter) {
+    let runPath = currentFile;
+    if (projectFolder && runPath.startsWith(projectFolder.name + '/')) {
+      runPath = runPath.slice(projectFolder.name.length + 1);
+    }
+    // Strip leading /projectName/ if present (virtual path format)
+    if (projectFolder && runPath.startsWith(`/${projectFolder.name}/`)) {
+      runPath = runPath.slice(projectFolder.name.length + 2);
+    }
+    let cmd = '';
+    if (ext === 'js' || ext === 'mjs' || ext === 'cjs') cmd = `node "${runPath}"`;
+    else if (ext === 'ts' || ext === 'tsx') cmd = `npx ts-node "${runPath}"`;
+    else if (ext === 'py') cmd = `python3 "${runPath}"`;
+    else { printToTerminal(`Error: Don't know how to run .${ext} files.`, "#f48771"); return; }
+    window.openTerminal();
+    switchTerminalTab('terminal');
+    try { shellWriter.write(cmd + '\r'); }
+    catch (e) { printToTerminal(`[Error] Terminal not ready: ${e.message}`, '#f48771'); }
     return;
   }
-  if (!currentFile.endsWith('.js')) {
-    printToTerminal("Error: Only JavaScript (.js) files can be run.", "#f48771");
-    return;
-  }
+  // Fallback: eval in main thread (only works for simple JS, no Node APIs)
+  if (ext !== 'js') { printToTerminal("Error: Open a folder to run non-JS files.", "#f48771"); return; }
   const oldLog = console.log;
   try {
-    printToTerminal("> Running JS code...", "#569cd6");
+    printToTerminal("> Running JS (browser eval — no Node APIs)...", "#569cd6");
     console.log = (...args) => {
       printToTerminal(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(" "));
     };
-    eval(activeEditor.getValue());
+    // eslint-disable-next-line no-eval
+    (0, eval)(activeEditor.getValue());
   } catch(e) {
     printToTerminal("Error: " + e.message, "#f48771");
   } finally {
@@ -2169,13 +2508,82 @@ function runCode(){
    Revokes the previous blob URL before making a new one, so there's no leak.
    The blob URL is revoked on the iframe's load event (not on a fixed timer)
    so relative-path resolution is still valid when the browser parses the doc. */
-function _applyPreviewSrcdoc(code, isJsFile) {
+// Find all linked asset paths from an HTML string (href/src attributes)
+function _extractAssetPaths(html) {
+  const paths = new Set();
+  // Match src="..." and href="..." (not http/https/data/# — relative only)
+  const re = /(?:src|href)=["']([^"'#?]+)["']/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const p = m[1].trim();
+    if (!p.startsWith('http') && !p.startsWith('//') && !p.startsWith('data:') && p !== '') {
+      paths.add(p);
+    }
+  }
+  return [...paths];
+}
+
+// Read a file from openFiles (by name match) or from the WebContainer if available
+async function _readAssetContent(assetPath) {
+  // Try to find in openFiles by suffix match (handles "style.css" → "src/style.css")
+  const name = assetPath.split('/').pop();
+  for (const [key, val] of Object.entries(openFiles)) {
+    if (key === assetPath || key.endsWith('/' + assetPath) || key.endsWith('/' + name)) {
+      return { content: val.content, type: _mimeForPath(assetPath) };
+    }
+  }
+  // Try WebContainer fs
+  if (webcontainerInstance && projectFolder) {
+    try {
+      const containerPath = toContainerPath(assetPath);
+      const bytes = await webcontainerInstance.fs.readFile(containerPath, 'utf-8');
+      return { content: bytes, type: _mimeForPath(assetPath) };
+    } catch { /* not found */ }
+  }
+  return null;
+}
+
+function _mimeForPath(p) {
+  if (p.endsWith('.css'))  return 'text/css';
+  if (p.endsWith('.js') || p.endsWith('.mjs')) return 'application/javascript';
+  if (p.endsWith('.json')) return 'application/json';
+  return 'text/plain';
+}
+
+// Inline CSS and JS assets referenced by the HTML so the sandboxed iframe
+// can render them without cross-origin fetch issues.
+async function _inlineAssets(html) {
+  const assetPaths = _extractAssetPaths(html);
+  let result = html;
+  for (const assetPath of assetPaths) {
+    const asset = await _readAssetContent(assetPath);
+    if (!asset) continue;
+    if (assetPath.endsWith('.css')) {
+      // Replace <link rel="stylesheet" href="..."> with <style>...</style>
+      const re = new RegExp(`<link[^>]*href=["']${assetPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>`, 'gi');
+      if (re.test(result)) {
+        result = result.replace(re, `<style>/* inlined: ${assetPath} */
+${asset.content}
+</style>`);
+      }
+    } else if (assetPath.endsWith('.js') || assetPath.endsWith('.mjs')) {
+      // Replace <script src="..."> with inline <script>...</script>
+      const re = new RegExp(`<script([^>]*)src=["']${assetPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>\s*</script>`, 'gi');
+      if (re.test(result)) {
+        result = result.replace(re, `<script$1>/* inlined: ${assetPath} */
+${asset.content}
+</script>`);
+      }
+    }
+  }
+  return result;
+}
+
+async function _applyPreviewSrcdoc(code, isJsFile) {
   const iframe = document.getElementById('live-iframe');
   if (!iframe) return;
 
-  // Revoke the previous blob URL now that we're about to replace it
   if (_previewBlobUrl) {
-    // Wait for the new srcdoc to load before revoking — use one-shot load listener
     const oldUrl = _previewBlobUrl;
     iframe.addEventListener('load', () => URL.revokeObjectURL(oldUrl), { once: true });
   }
@@ -2185,16 +2593,17 @@ function _applyPreviewSrcdoc(code, isJsFile) {
     srcdoc = `<!DOCTYPE html><html><body><script>${code}<` + `/script></body></html>`;
     _previewBlobUrl = null;
   } else {
-    // Create a blob URL to serve as <base href> so relative asset paths resolve
-    const blob = new Blob([code], { type: 'text/html' });
+    // Inline CSS/JS assets so the sandboxed iframe can load them
+    const inlined = await _inlineAssets(code);
+    const blob = new Blob([inlined], { type: 'text/html' });
     _previewBlobUrl = URL.createObjectURL(blob);
     const baseTag = `<base href="${_previewBlobUrl}">`;
-    if (/<head[^>]*>/i.test(code)) {
-      srcdoc = code.replace(/(<head[^>]*>)/i, `$1${baseTag}`);
-    } else if (/<body[^>]*>/i.test(code)) {
-      srcdoc = code.replace(/(<body[^>]*>)/i, `<head>${baseTag}</head>$1`);
+    if (/<head[^>]*>/i.test(inlined)) {
+      srcdoc = inlined.replace(/(<head[^>]*>)/i, `$1${baseTag}`);
+    } else if (/<body[^>]*>/i.test(inlined)) {
+      srcdoc = inlined.replace(/(<body[^>]*>)/i, `<head>${baseTag}</head>$1`);
     } else {
-      srcdoc = `<head>${baseTag}</head>` + code;
+      srcdoc = `<head>${baseTag}</head>` + inlined;
     }
   }
 
@@ -2221,11 +2630,19 @@ function previewHTML() {
   const iframe = document.getElementById("live-iframe");
 
   // Make sure the sandbox is set (may have been removed by a server preview)
-  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups');
+  iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-popups');
   previewPane.style.display = "flex";
+  // Hide editor panes so the preview takes the full editor area
+  document.getElementById('editor1').style.display = 'none';
+  const _ed2el = document.getElementById('editor2');
+  if (_ed2el && _ed2el.style.display !== 'none') _ed2el.dataset.wasVisible = 'true';
+  if (_ed2el) _ed2el.style.display = 'none';
   previewMode = 'srcdoc';
 
+  _previewSourceFile = currentFile;
+  _previewTabActive  = true;
   _applyPreviewSrcdoc(activeEditor.getValue(), isJs);
+  renderTabs();
   printToTerminal(`> Live Preview: ${currentFile.split('/').pop()}`, "#569cd6");
 }
 
@@ -2245,7 +2662,18 @@ function closePreview() {
     iframe.srcdoc = '';
   }
   previewMode = null;
+  _previewTabActive  = false;
+  _previewSourceFile = null;
   clearTimeout(_previewUpdateTimer);
+  // Restore editor panes
+  const _cpEd1 = document.getElementById('editor1');
+  if (_cpEd1) _cpEd1.style.display = '';
+  const _cpEd2 = document.getElementById('editor2');
+  if (_cpEd2 && _cpEd2.dataset.wasVisible === 'true') {
+    _cpEd2.style.display = '';
+    delete _cpEd2.dataset.wasVisible;
+  }
+  renderTabs();
   printToTerminal('> Closed Live Preview', "#858585");
 }
 
@@ -2264,7 +2692,8 @@ function updatePreviewIfOpen() {
   // Debounce: avoid hammering the iframe on every auto-save keystroke
   clearTimeout(_previewUpdateTimer);
   _previewUpdateTimer = setTimeout(() => {
-    _applyPreviewSrcdoc(activeEditor.getValue(), isJs);
+    // _applyPreviewSrcdoc is now async (inlines assets); fire-and-forget is fine here
+    _applyPreviewSrcdoc(activeEditor.getValue(), isJs).catch(() => {});
   }, 300);
 }
 
@@ -2378,6 +2807,7 @@ async function renderFileTree(dirHandle, parentElement, pathPrefix = "") {
     } else {
       const fileDiv = document.createElement('div');
       fileDiv.className = 'file-item';
+      fileDiv.title = fullPath; // used by ctxReveal to locate the item
       fileDiv.innerHTML = getFileIcon(name) + `<span style="margin-left:5px;">${name}</span>`;
       fileDiv.oncontextmenu = (e) => showContextMenu(e, 'file', name, handle, dirHandle, fullPath);
       fileDiv.onclick = () => openFile(fullPath, handle);
@@ -2408,7 +2838,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Only trigger if clicking the background, not a file/folder item
     if (e.target.closest('.file-item') || e.target.closest('summary') || e.target.closest('details')) return;
     e.preventDefault(); e.stopPropagation();
-    currentContextItem = { type: 'directory', name: projectFolder.name, handle: projectFolder, parentHandle: null, fullPath: projectFolder.name };
+    currentContextItem = { type: 'directory', name: projectFolder.name, handle: projectFolder, parentHandle: null, fullPath: projectFolder.name, virtual: !!webcontainerInstance };
     showContextMenu(e, 'directory', projectFolder.name, projectFolder, null, projectFolder.name);
   });
 
@@ -3318,12 +3748,15 @@ await renderFileTree(projectFolder, document.getElementById("tree-root")); // Lo
         }
       }
       
-      // Focus the right tabs
-      if (session.file1) switchTab(session.file1);
+      // Focus the right tabs — use switchTab directly (not switchToFileTab)
+      // because editor panes are already visible at this point
+      if (session.file1) await switchTab(session.file1);
       if (session.file2) {
+        // Only open split if editor2 isn't already visible
         if (document.getElementById("editor2").style.display === "none") toggleSplit();
         activeEditor = editor2;
-        switchTab(session.file2);
+        await switchTab(session.file2);
+        activeEditor = editor1; // reset focus to primary editor
       }
     }
     
@@ -3764,7 +4197,15 @@ async function startWebContainer() {
         const iframe = document.getElementById("live-iframe");
         if (previewPane && iframe) {
           previewPane.style.display = "flex";
+          // Hide editors so preview takes full area
+          const _srv1 = document.getElementById('editor1');
+          if (_srv1) _srv1.style.display = 'none';
+          const _srv2 = document.getElementById('editor2');
+          if (_srv2 && _srv2.style.display !== 'none') _srv2.dataset.wasVisible = 'true';
+          if (_srv2) _srv2.style.display = 'none';
           previewMode = 'server';
+          _previewTabActive = true;
+          _previewSourceFile = null;
           iframe.removeAttribute('sandbox');
           iframe.removeAttribute('srcdoc');
           iframe.src = url;
@@ -4009,6 +4450,7 @@ async function renderVirtualTree(path = '/', parentElement) {
       } else {
         const fileDiv = document.createElement('div');
         fileDiv.className = 'file-item';
+        fileDiv.title = fullPath; // used by ctxReveal
         fileDiv.innerHTML = getFileIcon(entry.name) + `<span style="margin-left:5px;">${entry.name}</span>`;
 
         fileDiv.oncontextmenu = (e) => {
@@ -4286,7 +4728,14 @@ function escHtml(str) {
 
 async function fifOpenMatch(fileResult, match) {
   const { filePath, handle } = fileResult;
-  // Open or switch to the file
+  // Open or switch to the file — always restore editor from preview if needed
+  _previewTabActive = false;
+  if (previewMode) {
+    document.getElementById('preview-pane').style.display = 'none';
+    document.getElementById('editor1').style.display = '';
+    const _ffe2 = document.getElementById('editor2');
+    if (_ffe2 && _ffe2.dataset.wasVisible === 'true') { _ffe2.style.display = ''; delete _ffe2.dataset.wasVisible; }
+  }
   if (openFiles[filePath]) {
     await switchTab(filePath);
   } else if (handle) {

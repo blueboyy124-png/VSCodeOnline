@@ -591,6 +591,10 @@ details[open] > div { border-left-color: rgba(255,255,255,.05); }
 .tab .close:hover { color: var(--text-bright); background: rgba(255,255,255,.15); }
 
 /* Parent-directory label shown on tabs when two files share the same name */
+.preview-tab .preview-tab-icon { font-size: 13px; line-height: 1; }
+.preview-tab { border-top: 2px solid transparent; }
+.preview-tab.active { border-top-color: #4ec9b0; }
+
 .tab-dir {
   font-size: 11px;
   color: var(--text-muted);
