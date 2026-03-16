@@ -3943,6 +3943,8 @@ document.addEventListener('keydown', (e) => {
     if (settingsOverlay && settingsOverlay.style.display === 'flex') { e.preventDefault(); window.closeSettings(); }
     const aboutOverlay = document.getElementById('about-overlay');
     if (aboutOverlay && aboutOverlay.style.display === 'flex') { e.preventDefault(); closeAbout(); }
+    const authModalOverlay = document.getElementById('auth-modal-overlay');
+    if (authModalOverlay && authModalOverlay.style.display === 'flex') { e.preventDefault(); if(typeof closeAuthModal==='function') closeAuthModal(); }
     closeContextMenu();
   }
 

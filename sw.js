@@ -4,7 +4,9 @@ const APP_FILES = [
   './index.html',
   './style.css',
   './script.js',
-  './manifest.json'
+  './manifest.json',
+  './icon192.png',
+  './icon512.png'
 ];
 
 // ── Install ───────────────────────────────────────────────────────
