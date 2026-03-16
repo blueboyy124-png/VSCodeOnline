@@ -271,6 +271,14 @@ async function _signInWithGitHub() {
   if (error) _setError(error.message);
 }
 
+async function _signInWithGoogle() {
+  const { error } = await _supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + window.location.pathname }
+  });
+  if (error) _setError(error.message);
+}
+
 async function _signOut() {
   _closeAuthDropdown();
   await _supabase.auth.signOut();
@@ -307,5 +315,6 @@ window.switchAuthTab       = _switchTab;
 window.signInWithEmail     = _signInWithEmail;
 window.signUpWithEmail     = _signUpWithEmail;
 window.signInWithGitHub    = _signInWithGitHub;
+window.signInWithGoogle    = _signInWithGoogle;
 window.signOut             = _signOut;
 window.currentUser         = currentUser; // live reference updates via onAuthStateChange
