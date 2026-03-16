@@ -2229,3 +2229,62 @@ body, .titlebar, .sidebar, .sidebar-header, .fif-panel,
   background: rgba(241,76,76,0.15);
   color: #f48771;
 }
+
+/* ================================================================
+   COLLABORATION — Share button, presence avatars, peer cursors
+   ================================================================ */
+
+/* Share button in titlebar */
+.share-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 150ms ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.share-btn:hover { opacity: 0.85; }
+
+/* Titlebar right zone — flex row */
+.titlebar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-right: 12px;
+}
+
+/* Presence avatars row */
+.collab-presence {
+  display: flex;
+  align-items: center;
+  gap: -4px; /* overlap */
+}
+
+.collab-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  border: 1.5px solid var(--bg-app);
+  margin-left: -4px;
+  flex-shrink: 0;
+  cursor: default;
+  transition: transform 150ms ease;
+}
+.collab-avatar:first-child { margin-left: 0; }
+.collab-avatar:hover { transform: scale(1.15); z-index: 10; }

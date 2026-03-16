@@ -184,8 +184,14 @@
     </div>
   </div>
 
-  <!-- Right zone: intentionally empty — OS window controls (minimize/maximize/close) sit here via WCO -->
-  <div class="titlebar-right"></div>
+  <!-- Right zone: share button + collab avatars + WCO -->
+  <div class="titlebar-right">
+    <div id="collab-presence" class="collab-presence"></div>
+    <button id="share-btn" class="share-btn" onclick="collabShare()" title="Share project" style="display:none">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      Share
+    </button>
+  </div>
 
 </div>
 
@@ -650,8 +656,11 @@
 <script src="https://unpkg.com/prettier@3.2.5/plugins/postcss.js"></script>
 <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/yjs@13.6.14/dist/yjs.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/y-monaco@0.1.4/dist/y-monaco.js"></script>
 <script src="script.js"></script>
 <script src="auth.js"></script>
 <script src="cloud.js"></script>
+<script src="collab.js"></script>
 </body>
 </html>
