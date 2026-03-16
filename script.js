@@ -1434,18 +1434,19 @@ const _workerBlobCache = {};
 async function _prefetchWorkerBlob(url) {
   if (_workerBlobCache[url]) return;
   try {
-    // cache:'no-store' tells the SW to skip this request (see sw.js).
-    // The browser fetches directly from the CDN, which returns proper CORS
-    // headers for Window-context requests — but not for SW-proxied ones.
-    const resp = await fetch(url, { mode: 'cors', cache: 'no-store' });
+    const resp = await fetch(url, { mode: 'cors', cache: 'no-store', credentials: 'omit' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const text = await resp.text();
     _workerBlobCache[url] = URL.createObjectURL(
       new Blob([text], { type: 'application/javascript' })
     );
   } catch (e) {
-    console.warn('[Monaco] Worker prefetch failed for', url, e.message);
-    _workerBlobCache[url] = url; // last-resort: raw CDN URL
+    // CORS blocked or 404 — create a minimal stub blob so Monaco doesn't
+    // try to construct a Worker with the raw CDN URL (which also fails).
+    // Monaco gracefully falls back to main-thread processing with the stub.
+    _workerBlobCache[url] = URL.createObjectURL(
+      new Blob(['self.onmessage=function(){}'], { type: 'application/javascript' })
+    );
   }
 }
 

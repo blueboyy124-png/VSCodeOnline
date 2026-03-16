@@ -1,20 +1,17 @@
 /* ================================================================
    COLLAB.JS — Real-time Collaboration for VS Code Online
-   Uses: Yjs (CRDT), Supabase Realtime
+   Uses: Supabase Realtime (broadcast + presence)
    ================================================================ */
 console.log('[Collab] collab.js loaded ✓');
 
 /* ── State ──────────────────────────────────────────────────────── */
-let _collabProjectId   = null;   // active collab project id
+let _collabProjectId   = null;
 let _collabProjectName = null;
-let _ydoc              = null;   // Yjs document
-let _realtimeChannel   = null;   // Supabase Realtime channel
-let _monacoBinding     = null;   // y-monaco binding
-let _awareness         = null;   // Yjs awareness (cursors/presence)
-let _clientId          = null;   // unique id for this session
-let _syncDebounce      = null;   // debounce timer for owner→cloud sync
-let _isOwner           = false;  // true if this user owns the project
-let _peers             = {};     // { clientId: { name, color, cursor } }
+let _realtimeChannel   = null;
+let _syncDebounce      = null;
+let _isOwner           = false;
+let _clientId          = null;
+let _peers             = {};
 
 const COLLAB_COLORS = [
   '#e06c75','#61afef','#98c379','#e5c07b',
@@ -71,13 +68,10 @@ async function _joinFromLink(projectId) {
 function _startCollabSession() {
   if (!_collabProjectId) return;
 
-  // Generate unique client id and pick a color
+  // Set up unique client id and color
   _clientId = Math.random().toString(36).slice(2);
   const myColor = COLLAB_COLORS[Math.abs(_hashStr(_clientId)) % COLLAB_COLORS.length];
   const myName  = _getMyName();
-
-  // Set up Yjs doc (used for future CRDT merging — broadcast handles live sync for now)
-  _ydoc = new Y.Doc();
 
   // Connect to Supabase Realtime
   _realtimeChannel = _supabase.channel(`collab:${_collabProjectId}`, {
@@ -402,14 +396,6 @@ function _stopCollabSession() {
   if (_realtimeChannel) {
     _supabase.removeChannel(_realtimeChannel);
     _realtimeChannel = null;
-  }
-  if (_monacoBinding) {
-    _monacoBinding.destroy();
-    _monacoBinding = null;
-  }
-  if (_ydoc) {
-    _ydoc.destroy();
-    _ydoc = null;
   }
   _peers = {};
   _collabProjectId   = null;
