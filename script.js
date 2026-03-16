@@ -1412,7 +1412,7 @@ function getFolderIcon(name, isOpen = false) {
 //   4. Monaco does new Worker(blobUrl) — the worker starts with code already
 //      inside it.  No network request, no importScripts, no CORS issue.
 
-const _MONACO_CDN = 'https://unpkg.com/monaco-editor@0.45.0/min/vs';
+const _MONACO_CDN = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs';
 
 // Map every label Monaco might pass to getWorkerUrl → CDN URL
 const _workerSrcMap = {
@@ -4193,7 +4193,7 @@ async function startWebContainer() {
     // already running — just remount below
   } else {
     try {
-      const { WebContainer } = await import('https://unpkg.com/@webcontainer/api');
+      const { WebContainer } = await import('https://cdn.jsdelivr.net/npm/@webcontainer/api/dist/index.js');
       webcontainerInstance = await WebContainer.boot();
       webcontainerInstance.on('server-ready', (port, url) => {
         printToTerminal(`> 🚀 Server ready at ${url}`, "#89d185");

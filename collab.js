@@ -75,20 +75,8 @@ function _startCollabSession() {
   const myColor = COLLAB_COLORS[Math.abs(_hashStr(_clientId)) % COLLAB_COLORS.length];
   const myName  = _getMyName();
 
-  // Set up Yjs doc + awareness
-  _ydoc      = new Y.Doc();
-  _awareness = new Map(); // lightweight awareness without y-protocols
-
-  // Bind Yjs to Monaco editor1
-  if (typeof Y !== 'undefined' && typeof MonacoBinding !== 'undefined' && editor1) {
-    const yText = _ydoc.getText('monaco');
-    _monacoBinding = new MonacoBinding(
-      yText,
-      editor1.getModel(),
-      new Set([editor1]),
-      null
-    );
-  }
+  // Set up Yjs doc (used for future CRDT merging — broadcast handles live sync for now)
+  _ydoc = new Y.Doc();
 
   // Connect to Supabase Realtime
   _realtimeChannel = _supabase.channel(`collab:${_collabProjectId}`, {
@@ -269,20 +257,23 @@ const _origSaveToCloud = window.saveProjectToCloud;
 window.saveProjectToCloud = async function() {
   await _origSaveToCloud();
   // After saving, grab the project id so we can start collab + show share btn
-  if (!_collabProjectId && currentUser && projectFolder) {
-    const { data } = await _supabase
-      .from('projects')
-      .select('id, name')
-      .eq('owner_id', currentUser.id)
-      .eq('name', projectFolder.name)
-      .single();
-    if (data) {
-      _collabProjectId   = data.id;
-      _collabProjectName = data.name;
-      _isOwner = true;
-      _startCollabSession();
-      _showShareBtn();
-    }
+  if (currentUser && projectFolder) {
+    try {
+      const { data } = await _supabase
+        .from('projects')
+        .select('id, name')
+        .eq('owner_id', currentUser.id)
+        .eq('name', projectFolder.name)
+        .single();
+      if (data) {
+        const changed = _collabProjectId !== data.id;
+        _collabProjectId   = data.id;
+        _collabProjectName = data.name;
+        _isOwner = true;
+        _showShareBtn();
+        if (changed) _startCollabSession();
+      }
+    } catch(e) { console.warn('[Collab] Could not get project id after save:', e); }
   }
 };
 
@@ -291,14 +282,21 @@ window.saveProjectToCloud = async function() {
    ================================================================ */
 const _origCloudOpen = window.cloudOpenProject;
 window.cloudOpenProject = async function(projectId, projectName) {
-  // Stop any existing session first
   _stopCollabSession();
   await _origCloudOpen(projectId, projectName);
+  // Check ownership
+  try {
+    const { data } = await _supabase
+      .from('projects')
+      .select('owner_id')
+      .eq('id', projectId)
+      .single();
+    _isOwner = !!(currentUser && data && data.owner_id === currentUser.id);
+  } catch(e) { _isOwner = false; }
   _collabProjectId   = projectId;
   _collabProjectName = projectName;
-  _isOwner = !!(currentUser && window._lastOpenedProjectOwnerId === currentUser.id);
-  _startCollabSession();
   _showShareBtn();
+  _startCollabSession();
 };
 
 /* ================================================================
