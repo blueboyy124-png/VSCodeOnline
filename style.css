@@ -1660,6 +1660,7 @@ body, .titlebar, .sidebar, .sidebar-header, .fif-panel,
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 100%;
   padding-bottom: 4px;
 }
 
