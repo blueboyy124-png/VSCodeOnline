@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mini-vscode-v14';
+const CACHE_NAME = 'mini-vscode-v15';
 
 const APP_FILES = [
   './index.html',

@@ -1,7 +1,8 @@
 /* ================================================================
    COLLAB.JS — Real-time Collaboration for VS Code Online
-   Uses: Yjs (CRDT), y-monaco, Supabase Realtime
+   Uses: Yjs (CRDT), Supabase Realtime
    ================================================================ */
+console.log('[Collab] collab.js loaded ✓');
 
 /* ── State ──────────────────────────────────────────────────────── */
 let _collabProjectId   = null;   // active collab project id
@@ -241,7 +242,11 @@ window.collabShare = collabShare;
 /* ── Show the share button ──────────────────────────────────────── */
 function _showShareBtn() {
   const btn = document.getElementById('share-btn');
-  if (btn) btn.style.display = 'flex';
+  if (btn) {
+    btn.style.display = 'flex';
+    btn.style.removeProperty('display'); // ensure no inline none
+    btn.style.display = 'flex';
+  }
 }
 
 /* ── Hide the share button ──────────────────────────────────────── */
@@ -252,52 +257,60 @@ function _hideShareBtn() {
 
 /* ================================================================
    HOOK INTO saveProjectToCloud — start collab after first save
+   Hook is registered after DOM load to ensure cloud.js has run first
    ================================================================ */
-const _origSaveToCloud = window.saveProjectToCloud;
-window.saveProjectToCloud = async function() {
-  await _origSaveToCloud();
-  // After saving, grab the project id so we can start collab + show share btn
-  if (currentUser && projectFolder) {
-    try {
-      const { data } = await _supabase
-        .from('projects')
-        .select('id, name')
-        .eq('owner_id', currentUser.id)
-        .eq('name', projectFolder.name)
-        .single();
-      if (data) {
-        const changed = _collabProjectId !== data.id;
-        _collabProjectId   = data.id;
-        _collabProjectName = data.name;
-        _isOwner = true;
-        _showShareBtn();
-        if (changed) _startCollabSession();
+window.addEventListener('DOMContentLoaded', () => {
+  // Small delay to ensure all scripts have fully executed
+  setTimeout(() => {
+    const _origSaveToCloud = window.saveProjectToCloud;
+    if (typeof _origSaveToCloud !== 'function') {
+      console.warn('[Collab] saveProjectToCloud not found — cloud.js may not have loaded');
+      return;
+    }
+    window.saveProjectToCloud = async function() {
+      await _origSaveToCloud();
+      if (currentUser && projectFolder) {
+        try {
+          const { data } = await _supabase
+            .from('projects')
+            .select('id, name')
+            .eq('owner_id', currentUser.id)
+            .eq('name', projectFolder.name)
+            .single();
+          if (data) {
+            const changed = _collabProjectId !== data.id;
+            _collabProjectId   = data.id;
+            _collabProjectName = data.name;
+            _isOwner = true;
+            _showShareBtn();
+            console.log('[Collab] Share button shown, project id:', data.id);
+            if (changed) _startCollabSession();
+          }
+        } catch(e) { console.warn('[Collab] Could not get project id after save:', e); }
       }
-    } catch(e) { console.warn('[Collab] Could not get project id after save:', e); }
-  }
-};
+    };
 
-/* ================================================================
-   ALSO hook into cloudOpenProject — start collab when opening a cloud project
-   ================================================================ */
-const _origCloudOpen = window.cloudOpenProject;
-window.cloudOpenProject = async function(projectId, projectName) {
-  _stopCollabSession();
-  await _origCloudOpen(projectId, projectName);
-  // Check ownership
-  try {
-    const { data } = await _supabase
-      .from('projects')
-      .select('owner_id')
-      .eq('id', projectId)
-      .single();
-    _isOwner = !!(currentUser && data && data.owner_id === currentUser.id);
-  } catch(e) { _isOwner = false; }
-  _collabProjectId   = projectId;
-  _collabProjectName = projectName;
-  _showShareBtn();
-  _startCollabSession();
-};
+    const _origCloudOpen = window.cloudOpenProject;
+    if (typeof _origCloudOpen === 'function') {
+      window.cloudOpenProject = async function(projectId, projectName) {
+        _stopCollabSession();
+        await _origCloudOpen(projectId, projectName);
+        try {
+          const { data } = await _supabase
+            .from('projects')
+            .select('owner_id')
+            .eq('id', projectId)
+            .single();
+          _isOwner = !!(currentUser && data && data.owner_id === currentUser.id);
+        } catch(e) { _isOwner = false; }
+        _collabProjectId   = projectId;
+        _collabProjectName = projectName;
+        _showShareBtn();
+        _startCollabSession();
+      };
+    }
+  }, 100);
+});
 
 /* ================================================================
    PRESENCE — render peer avatars in titlebar
