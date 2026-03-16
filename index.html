@@ -200,11 +200,14 @@
 
   <!-- Activity Bar -->
   <div class="activity-bar">
-    <div class="activity-icon active" title="Explorer">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+    <div class="activity-icon active" id="activity-explorer" title="Explorer (Ctrl+Shift+E)" onclick="switchActivityView('explorer')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
     </div>
-    <div class="activity-icon" title="Search" onclick="openFindInFiles()">
+    <div class="activity-icon" id="activity-search" title="Search" onclick="openFindInFiles()">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </div>
+    <div class="activity-icon" id="activity-cloud" title="Cloud Projects" onclick="switchActivityView('cloud')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
     </div>
     <div class="activity-icon" title="Source Control">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
@@ -217,12 +220,10 @@
       <!-- Profile / Accounts button -->
       <div class="activity-icon" id="profile-btn" title="Accounts" onclick="toggleAuthDropdown()">
         <div class="profile-avatar-btn" id="profile-avatar-btn">
-          <!-- Guest state -->
           <svg id="profile-guest-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
             <circle cx="12" cy="7" r="4"/>
           </svg>
-          <!-- Logged-in state: initials/avatar (hidden by default) -->
           <div class="profile-initials" id="profile-initials" style="display:none"></div>
         </div>
       </div>
@@ -232,51 +233,53 @@
     </div>
   </div><!-- end .activity-bar -->
 
-  <!-- Sidebar -->
+  <!-- Sidebar — houses both explorer and cloud views -->
   <div class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-      <span>EXPLORER</span>
-      <div class="sidebar-actions">
-        <div class="sidebar-action-btn" title="New File" onclick="createFile()">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M9 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5L9 1zm0 1.5L12.5 5H9V2.5zM7.5 6.5v2h-2v1h2v2h1v-2h2v-1h-2v-2h-1z"/></svg>
+
+    <!-- ── Explorer View ── -->
+    <div id="sidebar-explorer" class="sidebar-view">
+      <div class="sidebar-header">
+        <span>EXPLORER</span>
+        <div class="sidebar-actions">
+          <div class="sidebar-action-btn" title="New File" onclick="createFile()">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M9 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5L9 1zm0 1.5L12.5 5H9V2.5zM7.5 6.5v2h-2v1h2v2h1v-2h2v-1h-2v-2h-1z"/></svg>
+          </div>
+          <div class="sidebar-action-btn" title="New Folder" onclick="ctxNewFolderFromSidebar()">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 3l.04.87a2 2 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H13.17a2 2 0 0 0 1.991-1.819l.637-7A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2zm7 5.5v-2h-2v-1h2v-2h1v2h2v1h-2v2h-1z"/></svg>
+          </div>
+          <div class="sidebar-action-btn" title="Refresh Explorer" onclick="refreshTree && refreshTree()">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+          </div>
         </div>
-        <div class="sidebar-action-btn" title="New Folder" onclick="ctxNewFolderFromSidebar()">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 3l.04.87a2 2 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H13.17a2 2 0 0 0 1.991-1.819l.637-7A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2zm7 5.5v-2h-2v-1h2v-2h1v2h2v1h-2v2h-1z"/></svg>
-        </div>
-        <div class="sidebar-action-btn" title="Refresh Explorer" onclick="refreshTree && refreshTree()">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+      </div>
+      <div id="fileTree">
+        <div class="welcome-view">
+          <div class="welcome-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <button class="open-folder-btn" onclick="openFolder()">Open Folder</button>
         </div>
       </div>
     </div>
-    <div id="fileTree">
-      <div class="welcome-view">
-        <div class="welcome-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+
+    <!-- ── Cloud View ── -->
+    <div id="sidebar-cloud" class="sidebar-view" style="display:none">
+      <div class="sidebar-header">
+        <span>CLOUD PROJECTS</span>
+        <div class="sidebar-actions">
+          <div class="sidebar-action-btn" title="New Cloud Project" id="cloud-new-btn" onclick="cloudNewProject()">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M9 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5L9 1zm0 1.5L12.5 5H9V2.5zM7.5 6.5v2h-2v1h2v2h1v-2h2v-1h-2v-2h-1z"/></svg>
+          </div>
+          <div class="sidebar-action-btn" title="Refresh" id="cloud-refresh-btn" onclick="cloudLoadProjects()">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+          </div>
         </div>
-        <button class="open-folder-btn" onclick="openFolder()">Open Folder</button>
       </div>
+      <div id="cloud-project-list" class="cloud-project-list"></div>
     </div>
+
   </div>
   <div id="sidebar-resize-handle"></div>
-
-  <!-- Cloud Projects Panel -->
-  <div class="cloud-panel" id="cloud-panel">
-    <div class="cloud-panel-header">
-      <span>CLOUD PROJECTS</span>
-      <div class="sidebar-actions">
-        <div class="sidebar-action-btn" title="New Cloud Project" onclick="cloudNewProject()">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M9 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5L9 1zm0 1.5L12.5 5H9V2.5zM7.5 6.5v2h-2v1h2v2h1v-2h2v-1h-2v-2h-1z"/></svg>
-        </div>
-        <div class="sidebar-action-btn" title="Refresh" onclick="cloudLoadProjects()">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
-        </div>
-        <div class="sidebar-action-btn" title="Close" onclick="closeCloudPanel()">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
-        </div>
-      </div>
-    </div>
-    <div id="cloud-project-list" class="cloud-project-list"></div>
-  </div>
 
   <!-- Main editor area -->
   <div class="app-main">

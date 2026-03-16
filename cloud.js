@@ -4,25 +4,44 @@
    ================================================================ */
 
 /* ================================================================
-   CLOUD PANEL — open / close
+   CLOUD PANEL — open / close (uses sidebar-cloud view)
    ================================================================ */
 function openCloudPanel() {
+  const list = document.getElementById('cloud-project-list');
+  if (!list) return;
+
   if (!currentUser) {
-    openAuthModal('signin');
+    // Show guest sign-in prompt inside the cloud sidebar
+    _renderCloudGuest(list);
     return;
   }
-  const panel = document.getElementById('cloud-panel');
-  if (!panel) return;
-  panel.classList.add('open');
   cloudLoadProjects();
 }
 window.openCloudPanel = openCloudPanel;
 
 function closeCloudPanel() {
-  const panel = document.getElementById('cloud-panel');
-  if (panel) panel.classList.remove('open');
+  // Switch back to explorer view
+  if (typeof switchActivityView === 'function') {
+    switchActivityView('explorer');
+  }
 }
 window.closeCloudPanel = closeCloudPanel;
+
+function _renderCloudGuest(list) {
+  list.innerHTML = `
+    <div class="cloud-guest">
+      <div class="cloud-guest-icon">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+        </svg>
+      </div>
+      <div class="cloud-guest-title">Cloud Projects</div>
+      <div class="cloud-guest-sub">Sign in to save your projects to the cloud, access them from anywhere, and collaborate in real time.</div>
+      <button class="cloud-guest-btn-primary" onclick="openAuthModal('signin')">Sign In</button>
+      <button class="cloud-guest-btn-secondary" onclick="openAuthModal('signup')">Create Account</button>
+    </div>
+  `;
+}
 
 /* ================================================================
    LOAD PROJECTS — fetch from Supabase and render list
@@ -96,6 +115,11 @@ async function cloudLoadProjects() {
       item.querySelector('.cloud-project-info').addEventListener('click', () => cloudOpenProject(project.id, project.name));
       item.querySelector('.cloud-open-btn').addEventListener('click',   (e) => { e.stopPropagation(); cloudOpenProject(project.id, project.name); });
       item.querySelector('.cloud-delete-btn').addEventListener('click', (e) => { e.stopPropagation(); cloudDeleteProject(project.id, project.name); });
+
+      // Highlight currently open project
+      if (_collabProjectId === project.id) {
+        item.classList.add('cloud-project-active');
+      }
 
       list.appendChild(item);
     });

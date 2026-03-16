@@ -47,6 +47,41 @@ function toggleSidebar() {
   else document.getElementById('sidebar').classList.toggle('open');
 }
 
+/* ── Activity view switcher ─────────────────────────────────────── */
+let _currentActivityView = 'explorer';
+window.switchActivityView = function(view) {
+  // If same view clicked again → toggle sidebar
+  if (_currentActivityView === view) {
+    toggleSidebar();
+    return;
+  }
+  _currentActivityView = view;
+
+  // Update activity icon active state
+  document.querySelectorAll('.activity-icon[id^="activity-"]').forEach(el => {
+    el.classList.toggle('active', el.id === `activity-${view}`);
+  });
+
+  // Show correct sidebar view
+  const explorerView = document.getElementById('sidebar-explorer');
+  const cloudView    = document.getElementById('sidebar-cloud');
+  if (explorerView) explorerView.style.display = view === 'explorer' ? 'flex' : 'none';
+  if (cloudView)    cloudView.style.display    = view === 'cloud'    ? 'flex' : 'none';
+
+  // Make sure sidebar is open
+  if (window._sidebarToggle) {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar && (sidebar.style.width === '0px' || sidebar.classList.contains('collapsed'))) {
+      window._sidebarToggle();
+    }
+  }
+
+  // If switching to cloud, load projects
+  if (view === 'cloud') {
+    if (typeof openCloudPanel === 'function') openCloudPanel();
+  }
+};
+
 function toggleSplit() {
   // If preview is active, close it first so editors are in a known state
   if (previewMode) closePreview();
@@ -2910,32 +2945,143 @@ function renderWelcomeScreen(storedHandle, recentFolders) {
 const THEMES = [
   {
     id: 'vs-dark',
-    label: 'Dark+ (default)',
+    label: 'Dark+ (Indigo)',
     base: 'vs-dark',
-    rules: [],
-    colors: {},
+    rules: [
+      { token: 'comment',                foreground: '5a5a7a', fontStyle: 'italic' },
+      { token: 'string',                 foreground: '98c379' },
+      { token: 'string.template',        foreground: '98c379' },
+      { token: 'constant.numeric',       foreground: 'e5a96a' },
+      { token: 'constant.language',      foreground: 'bd93f9' },
+      { token: 'keyword',                foreground: 'bd93f9' },
+      { token: 'keyword.control',        foreground: 'bd93f9' },
+      { token: 'keyword.operator',       foreground: 'c8c8d4' },
+      { token: 'entity.name.function',   foreground: '7ec8e3' },
+      { token: 'entity.name.class',      foreground: 'e5a96a' },
+      { token: 'entity.name.tag',        foreground: 'bd93f9' },
+      { token: 'entity.other.attribute', foreground: '7ec8e3' },
+      { token: 'support.function',       foreground: '7ec8e3' },
+      { token: 'support.class',          foreground: 'e5a96a' },
+      { token: 'variable',               foreground: 'c8c8d4' },
+      { token: 'variable.parameter',     foreground: 'ffb86c' },
+      { token: 'number',                 foreground: 'e5a96a' },
+      { token: 'regexp',                 foreground: '98c379' },
+      { token: 'operator',               foreground: 'c8c8d4' },
+      { token: 'type',                   foreground: 'e5a96a' },
+      { token: 'tag',                    foreground: 'bd93f9' },
+      { token: 'attribute.name',         foreground: '7ec8e3' },
+      { token: 'attribute.value',        foreground: '98c379' },
+    ],
+    colors: {
+      'editor.background':                '#111113',
+      'editor.foreground':                '#c8c8d4',
+      'editor.lineHighlightBackground':   '#1c1c26',
+      'editor.selectionBackground':       '#2d2557',
+      'editor.inactiveSelectionBackground': '#231e45',
+      'editorLineNumber.foreground':      '#3a3a52',
+      'editorLineNumber.activeForeground':'#7c6af7',
+      'editorCursor.foreground':          '#7c6af7',
+      'editorWhitespace.foreground':      '#2a2a38',
+      'editorIndentGuide.background':     '#1e1e28',
+      'editorIndentGuide.activeBackground':'#2d2557',
+      'editor.findMatchBackground':       '#2d2557',
+      'editor.findMatchHighlightBackground': '#1e1a40',
+      'editorBracketMatch.background':    '#2d2557',
+      'editorBracketMatch.border':        '#7c6af7',
+    },
     shell: {
-      '--bg-app':         '#181818',
-      '--bg-editor':      '#1e1e1e',
-      '--bg-sidebar':     '#181818',
-      '--bg-activity':    '#181818',
-      '--bg-hover':       '#2a2d2e',
-      '--bg-active':      '#37373d',
-      '--bg-input':       '#3c3c3c',
-      '--terminal-bg':    '#181818',
-      '--border':         '#2b2b2b',
-      '--border-light':   '#3c3c3c',
-      '--accent':         '#007acc',
-      '--accent-hover':   '#1a8fdb',
-      '--accent-select':  '#094771',
-      '--text-main':      '#cccccc',
-      '--text-bright':    '#ffffff',
-      '--text-muted':     '#858585',
-      '--text-disabled':  '#5a5a5a',
-      '--palette-bg':     '#161616',
-      '--palette-border': '#333333',
-      '--palette-hover':  '#094771',
-      '--status-bg':      '#007acc',
+      '--bg-app':         '#0d0d0f',
+      '--bg-editor':      '#111113',
+      '--bg-sidebar':     '#0d0d0f',
+      '--bg-activity':    '#0a0a0c',
+      '--bg-hover':       '#1c1c22',
+      '--bg-active':      '#23232c',
+      '--bg-input':       '#1a1a22',
+      '--terminal-bg':    '#0d0d0f',
+      '--border':         '#1e1e28',
+      '--border-light':   '#2a2a38',
+      '--accent':         '#7c6af7',
+      '--accent-hover':   '#9585f8',
+      '--accent-select':  '#2d2557',
+      '--text-main':      '#c8c8d4',
+      '--text-bright':    '#f0f0f8',
+      '--text-muted':     '#6b6b7e',
+      '--text-disabled':  '#3e3e52',
+      '--palette-bg':     '#0f0f14',
+      '--palette-border': '#2a2a38',
+      '--palette-hover':  '#2d2557',
+      '--status-bg':      '#6155d4',
+      '--status-fg':      '#ffffff',
+    },
+  },
+  {
+    id: 'dark-blue',
+    label: 'Dark+ (Blue)',
+    base: 'vs-dark',
+    rules: [
+      { token: 'comment',                foreground: '4a5a72', fontStyle: 'italic' },
+      { token: 'string',                 foreground: '98c379' },
+      { token: 'string.template',        foreground: '98c379' },
+      { token: 'constant.numeric',       foreground: '79c0ff' },
+      { token: 'constant.language',      foreground: '58a6ff' },
+      { token: 'keyword',                foreground: '58a6ff' },
+      { token: 'keyword.control',        foreground: '58a6ff' },
+      { token: 'keyword.operator',       foreground: 'c8d8e8' },
+      { token: 'entity.name.function',   foreground: '7ec8e3' },
+      { token: 'entity.name.class',      foreground: 'ffa657' },
+      { token: 'entity.name.tag',        foreground: '58a6ff' },
+      { token: 'entity.other.attribute', foreground: '79c0ff' },
+      { token: 'support.function',       foreground: '7ec8e3' },
+      { token: 'support.class',          foreground: 'ffa657' },
+      { token: 'variable',               foreground: 'c8d8e8' },
+      { token: 'variable.parameter',     foreground: 'ffa657' },
+      { token: 'number',                 foreground: '79c0ff' },
+      { token: 'regexp',                 foreground: '98c379' },
+      { token: 'operator',               foreground: 'c8d8e8' },
+      { token: 'type',                   foreground: 'ffa657' },
+      { token: 'tag',                    foreground: '58a6ff' },
+      { token: 'attribute.name',         foreground: '79c0ff' },
+      { token: 'attribute.value',        foreground: '98c379' },
+    ],
+    colors: {
+      'editor.background':                '#0d1117',
+      'editor.foreground':                '#c8d8e8',
+      'editor.lineHighlightBackground':   '#161b26',
+      'editor.selectionBackground':       '#1f3f5b',
+      'editor.inactiveSelectionBackground': '#172638',
+      'editorLineNumber.foreground':      '#2a3a52',
+      'editorLineNumber.activeForeground':'#58a6ff',
+      'editorCursor.foreground':          '#58a6ff',
+      'editorWhitespace.foreground':      '#1e2838',
+      'editorIndentGuide.background':     '#1a2438',
+      'editorIndentGuide.activeBackground':'#1f3f5b',
+      'editor.findMatchBackground':       '#1f3f5b',
+      'editor.findMatchHighlightBackground': '#162840',
+      'editorBracketMatch.background':    '#1f3f5b',
+      'editorBracketMatch.border':        '#58a6ff',
+    },
+    shell: {
+      '--bg-app':         '#0a0d12',
+      '--bg-editor':      '#0d1117',
+      '--bg-sidebar':     '#0a0d12',
+      '--bg-activity':    '#080b10',
+      '--bg-hover':       '#161b26',
+      '--bg-active':      '#1c2333',
+      '--bg-input':       '#161b26',
+      '--terminal-bg':    '#0a0d12',
+      '--border':         '#1a2030',
+      '--border-light':   '#243048',
+      '--accent':         '#58a6ff',
+      '--accent-hover':   '#79baff',
+      '--accent-select':  '#1f3f5b',
+      '--text-main':      '#c8d8e8',
+      '--text-bright':    '#e6f0f8',
+      '--text-muted':     '#5a7090',
+      '--text-disabled':  '#2a3a52',
+      '--palette-bg':     '#0a0d14',
+      '--palette-border': '#243048',
+      '--palette-hover':  '#1f3f5b',
+      '--status-bg':      '#1358a8',
       '--status-fg':      '#ffffff',
     },
   },
@@ -3499,9 +3645,11 @@ let _previewThemeId = null;
 
 function initThemes() {
   THEMES.forEach(theme => {
-    // vs-dark and vs (light) are Monaco built-ins — don't redefine them
-    if (theme.id === 'vs-dark' || theme.id === 'vs-light') return;
-    monaco.editor.defineTheme(theme.id, {
+    // vs-light maps to Monaco built-in 'vs' — skip redefine
+    if (theme.id === 'vs-light') return;
+    // vs-dark has custom rules now — define it as a custom theme
+    const monacoId = theme.id === 'vs-dark' ? 'vs-dark-custom' : theme.id;
+    monaco.editor.defineTheme(monacoId, {
       base: theme.base,
       inherit: true,
       rules: theme.rules,
@@ -3513,8 +3661,11 @@ function initThemes() {
 
 function applyTheme(id, save = true) {
   const theme = THEMES.find(t => t.id === id) || THEMES[0];
-  // vs-light maps to Monaco built-in 'vs'
-  const monacoId = theme.id === 'vs-light' ? 'vs' : theme.id;
+  // vs-light → Monaco built-in 'vs'; vs-dark → our custom 'vs-dark-custom'
+  let monacoId;
+  if (theme.id === 'vs-light') monacoId = 'vs';
+  else if (theme.id === 'vs-dark') monacoId = 'vs-dark-custom';
+  else monacoId = theme.id;
   monaco.editor.setTheme(monacoId);
   activeThemeId = theme.id;
 
@@ -3599,7 +3750,7 @@ function renderThemeList() {
       closeThemePicker(true);
     };
     li.onmouseenter = () => {
-      const monacoId = theme.id === 'vs-light' ? 'vs' : theme.id;
+      const monacoId = theme.id === 'vs-light' ? 'vs' : theme.id === 'vs-dark' ? 'vs-dark-custom' : theme.id;
       monaco.editor.setTheme(monacoId);
       if (theme.shell) {
         Object.entries(theme.shell).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
@@ -3610,7 +3761,7 @@ function renderThemeList() {
     li.onmouseleave = () => {
       const sel = _filteredThemes[_themePickerIndex];
       if (sel) {
-        const mId = sel.id === 'vs-light' ? 'vs' : sel.id;
+        const mId = sel.id === 'vs-light' ? 'vs' : sel.id === 'vs-dark' ? 'vs-dark-custom' : sel.id;
         monaco.editor.setTheme(mId);
         if (sel.shell) {
           Object.entries(sel.shell).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
