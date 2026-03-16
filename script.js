@@ -3794,6 +3794,8 @@ const editorCommands = [
   { label: "Terminal: Clear", action: () => term.clear(), icon: "🧹" },
   { label: "Live Preview: Start", action: previewHTML, icon: "🌐" },
   { label: "Live Preview: Stop", action: closePreview, icon: "❌" },
+  { label: "Save Project to Cloud", action: () => typeof saveProjectToCloud === 'function' && saveProjectToCloud(), icon: "☁️" },
+  { label: "My Cloud Projects", action: () => typeof openCloudPanel === 'function' && openCloudPanel(), icon: "🗂️" },
 ];
 
 // 1. Open and Close Functions

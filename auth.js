@@ -54,7 +54,7 @@ function _updateProfileButton() {
 
     // If user has an avatar image, show it; otherwise show initials
     if (meta.avatar_url) {
-      initialsEl.innerHTML = `<img src="${meta.avatar_url}" alt="${initials}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+      initialsEl.innerHTML = `<img src="${meta.avatar_url}" alt="${initials}" style="width:26px;height:26px;object-fit:cover;border-radius:50%;display:block;">`;
     } else {
       initialsEl.textContent = initials;
     }
@@ -127,13 +127,12 @@ function _renderDropdown(el) {
         </div>
       </div>
       <div class="auth-dd-divider"></div>
-      <div class="auth-dd-item" onclick="_closeAuthDropdown()">
+      <div class="auth-dd-item" onclick="_closeAuthDropdown(); openCloudPanel()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
           <polyline points="9 22 9 12 15 12 15 22"/>
         </svg>
         My Cloud Projects
-        <span class="auth-dd-badge">Soon</span>
       </div>
       <div class="auth-dd-divider"></div>
       <div class="auth-dd-item auth-dd-danger" onclick="_signOut()">
