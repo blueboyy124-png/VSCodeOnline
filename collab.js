@@ -20,19 +20,61 @@ const COLLAB_COLORS = [
 
 /* ── On page load: check URL for ?project= ──────────────────────── */
 window.addEventListener('DOMContentLoaded', () => {
-  const params   = new URLSearchParams(window.location.search);
-  const projId   = params.get('project');
-  if (projId) _joinFromLink(projId);
+  const params = new URLSearchParams(window.location.search);
+  const projId = params.get('project');
+  if (!projId) return;
+
+  // Show a banner immediately so the user knows something is happening
+  _showJoiningBanner(projId);
+
+  // Wait for Monaco editor to be ready (it loads async via require())
+  // Poll every 200ms until editor1 exists, then join
+  const _waitForEditor = setInterval(() => {
+    if (typeof editor1 !== 'undefined' && editor1 && typeof cloudOpenProject === 'function') {
+      clearInterval(_waitForEditor);
+      _joinFromLink(projId);
+    }
+  }, 200);
+
+  // Safety timeout after 15s
+  setTimeout(() => {
+    clearInterval(_waitForEditor);
+    _hideJoiningBanner();
+  }, 15000);
 });
+
+function _showJoiningBanner(projId) {
+  // Create a subtle top banner so the user sees something immediately
+  let banner = document.getElementById('_collab-join-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = '_collab-join-banner';
+    banner.style.cssText = `
+      position:fixed; top:0; left:0; right:0; z-index:99999;
+      background:var(--accent); color:#fff;
+      font-size:12px; font-weight:600; text-align:center;
+      padding:8px; letter-spacing:.02em;
+      font-family:'Inter','Segoe UI',system-ui,sans-serif;
+    `;
+    document.body.appendChild(banner);
+  }
+  banner.textContent = '🔗 Opening shared project…';
+}
+
+function _hideJoiningBanner() {
+  const banner = document.getElementById('_collab-join-banner');
+  if (banner) banner.remove();
+}
 
 /* ================================================================
    JOIN FROM SHARE LINK
    ================================================================ */
 async function _joinFromLink(projectId) {
-  // Show a loading state in the editor area
-  if (typeof printToOutput === 'function') printToOutput('Joining shared project...', '#858585');
+  _hideJoiningBanner();
 
-  // Fetch project info
+  if (typeof printToOutput === 'function') printToOutput('Joining shared project…', '#858585');
+
+  // Fetch project info — RLS allows anyone to read by ID now
   const { data: project, error } = await _supabase
     .from('projects')
     .select('id, name, owner_id')
@@ -40,25 +82,32 @@ async function _joinFromLink(projectId) {
     .single();
 
   if (error || !project) {
-    if (typeof printToOutput === 'function') printToOutput('Project not found or access denied.', '#f48771');
+    if (typeof printToOutput === 'function') {
+      printToOutput('⚠ Could not open shared project — the link may be invalid or the project was deleted.', '#f48771');
+    }
+    // Clean the URL so refreshing doesn't retry a bad link
+    window.history.replaceState({}, '', window.location.pathname);
     return;
   }
 
   _collabProjectId   = project.id;
   _collabProjectName = project.name;
-  _isOwner = currentUser && currentUser.id === project.owner_id;
+  _isOwner = !!(currentUser && currentUser.id === project.owner_id);
 
-  // Load files from cloud into editor
-  await cloudOpenProject(project.id, project.name);
+  // Load files into editor
+  // Call the original cloudOpenProject (before collab.js wraps it)
+  await _origCloudOpen(project.id, project.name);
 
   // Start real-time session
   _startCollabSession();
-
-  // Show share button since we're in a collab project
   _showShareBtn();
 
+  // Clean up the URL (replace so back button works cleanly)
+  window.history.replaceState({}, '', `${window.location.pathname}?project=${projectId}`);
+
   if (typeof printToOutput === 'function') {
-    printToOutput(`✓ Joined "${project.name}" — collaboration active`, '#89d185');
+    const role = _isOwner ? 'owner' : 'collaborator';
+    printToOutput(`✓ Joined "${project.name}" as ${role} — collaboration active`, '#89d185');
   }
 }
 
@@ -250,41 +299,43 @@ function _hideShareBtn() {
 }
 
 /* ================================================================
-   HOOK INTO saveProjectToCloud — start collab after first save
-   Hook is registered after DOM load to ensure cloud.js has run first
+   HOOK INTO saveProjectToCloud & cloudOpenProject
+   Registered after DOM load to ensure cloud.js has run first
    ================================================================ */
+let _origCloudOpen = null; // hoisted so _joinFromLink can use it
+
 window.addEventListener('DOMContentLoaded', () => {
-  // Small delay to ensure all scripts have fully executed
   setTimeout(() => {
+    // ── Hook saveProjectToCloud ──────────────────────────────────
     const _origSaveToCloud = window.saveProjectToCloud;
     if (typeof _origSaveToCloud !== 'function') {
       console.warn('[Collab] saveProjectToCloud not found — cloud.js may not have loaded');
-      return;
+    } else {
+      window.saveProjectToCloud = async function() {
+        await _origSaveToCloud();
+        if (currentUser && projectFolder) {
+          try {
+            const { data } = await _supabase
+              .from('projects')
+              .select('id, name')
+              .eq('owner_id', currentUser.id)
+              .eq('name', projectFolder.name)
+              .single();
+            if (data) {
+              const changed = _collabProjectId !== data.id;
+              _collabProjectId   = data.id;
+              _collabProjectName = data.name;
+              _isOwner = true;
+              _showShareBtn();
+              if (changed) _startCollabSession();
+            }
+          } catch(e) { console.warn('[Collab] Could not get project id after save:', e); }
+        }
+      };
     }
-    window.saveProjectToCloud = async function() {
-      await _origSaveToCloud();
-      if (currentUser && projectFolder) {
-        try {
-          const { data } = await _supabase
-            .from('projects')
-            .select('id, name')
-            .eq('owner_id', currentUser.id)
-            .eq('name', projectFolder.name)
-            .single();
-          if (data) {
-            const changed = _collabProjectId !== data.id;
-            _collabProjectId   = data.id;
-            _collabProjectName = data.name;
-            _isOwner = true;
-            _showShareBtn();
-            console.log('[Collab] Share button shown, project id:', data.id);
-            if (changed) _startCollabSession();
-          }
-        } catch(e) { console.warn('[Collab] Could not get project id after save:', e); }
-      }
-    };
 
-    const _origCloudOpen = window.cloudOpenProject;
+    // ── Hook cloudOpenProject ────────────────────────────────────
+    _origCloudOpen = window.cloudOpenProject;
     if (typeof _origCloudOpen === 'function') {
       window.cloudOpenProject = async function(projectId, projectName) {
         _stopCollabSession();
