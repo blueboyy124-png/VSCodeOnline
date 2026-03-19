@@ -104,8 +104,7 @@ input, textarea, select,
 .titlebar {
   background: var(--bg-app);
   height: 38px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -129,40 +128,42 @@ input, textarea, select,
   }
   body { padding-top: env(titlebar-area-height, 38px); }
 
-  /* Everything interactive must opt out of drag so clicks still work */
   .titlebar-left,
   .titlebar-center,
   .titlebar-right,
   .menubar,
   .menu-item,
   .mobile-btn,
-  .titlebar-app-icon,
-  .titlebar-nav,
   .titlebar-nav-btn,
   .titlebar-btn,
+  .titlebar-home-btn,
   .search-bar {
     -webkit-app-region: no-drag;
   }
 }
 
-/* Grid zones */
+/* Left zone: home + menus — takes natural width */
 .titlebar-left {
   display: flex;
   align-items: center;
   height: 100%;
+  flex-shrink: 0;
   min-width: 0;
-  overflow: visible;
+  z-index: 2;
 }
 
+/* Center: absolutely positioned so it never pushes left/right */
 .titlebar-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  justify-content: center;
   align-items: center;
   height: 100%;
-  padding: 4px 0;
-  /* Shift slightly right to compensate for heavy left side */
-  transform: translateX(10%);
+  pointer-events: none; /* let clicks through to things behind */
+  z-index: 1;
 }
+.titlebar-center > * { pointer-events: all; }
 
 .titlebar-center-inner {
   display: flex;
@@ -170,12 +171,56 @@ input, textarea, select,
   gap: 3px;
 }
 
+/* Right zone: push to far right */
 .titlebar-right {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   height: 100%;
+  margin-left: auto;
+  flex-shrink: 0;
+  z-index: 2;
+  padding-right: 8px;
+  gap: 6px;
 }
+
+/* ── Home button ──────────────────────────────────────────────── */
+.titlebar-home-btn {
+  width: 36px; height: 38px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--accent);
+  opacity: .85;
+  text-decoration: none;
+  transition: opacity var(--ease-fast), background var(--ease-fast);
+  border-radius: 5px;
+}
+.titlebar-home-btn:hover { opacity: 1; background: rgba(124,106,247,.1); }
+
+/* ── Menubar ──────────────────────────────────────────────────── */
+.menubar {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.menu-item {
+  height: 38px;
+  padding: 0 7px;
+  display: flex;
+  align-items: center;
+  cursor: default;
+  position: relative;
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  border-radius: 5px;
+  transition: background var(--ease-fast), color var(--ease-fast);
+}
+.menu-item:hover  { background: rgba(255,255,255,.06); color: var(--text-main); }
+.menu-item.active { background: rgba(124,106,247,.12); color: var(--text-bright); }
+.mobile-btn { display: none; cursor: pointer; }
 
 /* ── Back / Forward navigation arrows ────────────────────────── */
 .titlebar-nav-btn {
@@ -192,7 +237,7 @@ input, textarea, select,
 
 /* ── Search bar ───────────────────────────────────────────────── */
 .search-bar {
-  width: 480px; max-width: 100%; height: 26px;
+  width: min(420px, 28vw); height: 26px;
   background: rgba(255,255,255,.04);
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 8px;
@@ -2284,13 +2329,6 @@ body, .titlebar, .sidebar, .sidebar-header, .fif-panel,
 .share-btn:hover { opacity: 0.88; box-shadow: 0 4px 16px rgba(124,106,247,.4); }
 
 /* Titlebar right zone */
-.titlebar-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-right: 12px;
-}
 
 /* Presence avatars row */
 .collab-presence {

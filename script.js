@@ -3129,10 +3129,30 @@ window.toggleRootFolder = function() {
 
 /* RESTORE SESSION ON LOAD */
 window.addEventListener('DOMContentLoaded', async () => {
+  // Handle navigation from home.html
+  const openCloud = sessionStorage.getItem('openCloudOnLoad');
+  if (openCloud) {
+    sessionStorage.removeItem('openCloudOnLoad');
+    setTimeout(() => { if (typeof switchActivityView === 'function') switchActivityView('cloud'); }, 500);
+  }
+  const openProject = sessionStorage.getItem('openCloudProject');
+  if (openProject) {
+    sessionStorage.removeItem('openCloudProject');
+    try {
+      const { id, name } = JSON.parse(openProject);
+      setTimeout(() => { if (typeof cloudOpenProject === 'function') cloudOpenProject(id, name); }, 800);
+    } catch {}
+  }
+  const authAction = sessionStorage.getItem('authAction');
+  if (authAction || window.location.hash === '#auth' || window.location.hash.startsWith('#auth-')) {
+    sessionStorage.removeItem('authAction');
+    setTimeout(() => { if (typeof openAuthModal === 'function') openAuthModal(authAction || 'signin'); }, 300);
+    window.location.hash = '';
+  }
+
   // Right-click on empty explorer space
   document.getElementById('fileTree').addEventListener('contextmenu', (e) => {
     if (!projectFolder) return;
-    // Only trigger if clicking the background, not a file/folder item
     if (e.target.closest('.file-item') || e.target.closest('summary') || e.target.closest('details')) return;
     e.preventDefault(); e.stopPropagation();
     currentContextItem = { type: 'directory', name: projectFolder.name, handle: projectFolder, parentHandle: null, fullPath: projectFolder.name, virtual: !!webcontainerInstance };

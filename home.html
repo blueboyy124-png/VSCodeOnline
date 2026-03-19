@@ -6,476 +6,490 @@
 <title>VS Code Online</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0d0d0f">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
+  :root {
+    --bg:         #0d0d0f;
+    --bg-card:    #111116;
+    --border:     #1e1e2a;
+    --accent:     #7c6af7;
+    --accent-dim: rgba(124,106,247,.14);
+    --text:       #c8c8d4;
+    --text-bright:#f0f0f8;
+    --text-muted: #6b6b7e;
+    --green:      #4ec994;
+    --red:        #f14c4c;
+    --status-bg:  #6155d4;
+  }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body {
-    height: 100%;
-    background: #0d0d0f;
-    color: #c8c8d4;
-    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
-  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Inter','Segoe UI',system-ui,-apple-system,sans-serif; font-size: 13px; -webkit-font-smoothing: antialiased; user-select: none; }
 
-  /* ── Noise texture overlay ── */
-  body::before {
-    content: '';
-    position: fixed; inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 0;
-  }
+  .app { display: flex; flex-direction: column; height: 100%; }
 
-  /* ── Ambient glow ── */
-  .glow-1 {
-    position: fixed;
-    top: -200px; left: 50%;
-    transform: translateX(-50%);
-    width: 800px; height: 600px;
-    background: radial-gradient(ellipse, rgba(124,106,247,.14) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
+  /* ─── Titlebar ─────────────────────────────────────────────── */
+  .titlebar {
+    height: 38px; background: var(--bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0; flex-shrink: 0; position: relative;
   }
-  .glow-2 {
-    position: fixed;
-    bottom: -200px; right: -100px;
-    width: 500px; height: 500px;
-    background: radial-gradient(ellipse, rgba(97,175,239,.08) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
+  .tb-left { display: flex; align-items: center; height: 100%; padding: 0 8px; gap: 2px; z-index: 2; }
+  .tb-logo {
+    display: flex; align-items: center; gap: 7px; padding: 0 6px;
+    color: var(--text-bright); font-size: 13px; font-weight: 600; text-decoration: none;
+    border-radius: 5px; height: 28px;
+    transition: background 100ms;
   }
-
-  /* ── Nav ── */
-  nav {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    height: 56px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 32px;
-    background: rgba(13,13,15,.8);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(255,255,255,.06);
-    z-index: 100;
+  .tb-logo:hover { background: rgba(255,255,255,.05); }
+  .tb-logo svg { color: var(--accent); }
+  .tb-center {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 4px; z-index: 1; pointer-events: none;
   }
-  .nav-logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 15px;
-    font-weight: 700;
-    color: #f0f0f8;
-    text-decoration: none;
+  .tb-center > * { pointer-events: all; }
+  .tb-search {
+    width: min(360px, 32vw); height: 26px;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 7px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 10px; gap: 6px; cursor: pointer; color: var(--text-muted); font-size: 12px;
+    transition: border-color 150ms;
   }
-  .nav-logo svg { color: #7c6af7; }
-  .nav-links {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .tb-search:hover { border-color: rgba(124,106,247,.35); }
+  .tb-search kbd { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1); border-radius: 4px; padding: 1px 5px; font-size: 10px; font-family: inherit; color: var(--text-muted); }
+  .tb-right { display: flex; align-items: center; gap: 6px; margin-left: auto; padding-right: 10px; z-index: 2; }
+  .tb-btn {
+    height: 26px; padding: 0 12px; border-radius: 6px; border: none;
+    font-size: 12px; font-weight: 500; font-family: inherit; cursor: pointer;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 5px;
+    transition: opacity 150ms, background 150ms;
   }
-  .nav-btn-ghost {
-    padding: 7px 16px;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,.1);
-    background: transparent;
-    color: #c8c8d4;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    text-decoration: none;
-    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
-    font-family: inherit;
-    display: inline-flex; align-items: center;
-  }
-  .nav-btn-ghost:hover { background: rgba(255,255,255,.06); color: #f0f0f8; border-color: rgba(255,255,255,.18); }
-  .nav-btn-primary {
-    padding: 7px 16px;
-    border-radius: 8px;
-    border: none;
-    background: #7c6af7;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    transition: opacity 150ms ease, box-shadow 150ms ease;
-    font-family: inherit;
-    display: inline-flex; align-items: center; gap: 6px;
-  }
-  .nav-btn-primary:hover { opacity: .88; box-shadow: 0 4px 16px rgba(124,106,247,.4); }
-
-  /* ── Hero ── */
-  main {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 140px 24px 80px;
-    min-height: 100vh;
-  }
-
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
-    border-radius: 100px;
-    background: rgba(124,106,247,.12);
-    border: 1px solid rgba(124,106,247,.25);
-    color: #a898f8;
-    font-size: 12px;
-    font-weight: 500;
-    margin-bottom: 28px;
-    letter-spacing: .02em;
-  }
-  .badge-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: #7c6af7;
-    animation: pulse 2s ease infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: .6; transform: scale(.85); }
-  }
-
-  h1 {
-    font-size: clamp(36px, 6vw, 72px);
-    font-weight: 800;
-    line-height: 1.08;
-    letter-spacing: -.03em;
-    color: #f0f0f8;
-    max-width: 800px;
-    margin-bottom: 20px;
-  }
-  h1 .accent {
-    background: linear-gradient(135deg, #7c6af7 0%, #61afef 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .subtitle {
-    font-size: clamp(15px, 2vw, 18px);
-    color: #6b6b7e;
-    max-width: 520px;
-    line-height: 1.7;
-    margin-bottom: 40px;
-  }
-
-  .hero-actions {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    justify-content: center;
-    margin-bottom: 64px;
-  }
-  .btn-hero-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 13px 28px;
-    border-radius: 10px;
-    background: #7c6af7;
-    color: #fff;
-    font-size: 15px;
-    font-weight: 600;
-    text-decoration: none;
-    border: none;
-    cursor: pointer;
-    font-family: inherit;
-    transition: opacity 150ms ease, box-shadow 150ms ease, transform 150ms ease;
-  }
-  .btn-hero-primary:hover { opacity: .9; box-shadow: 0 8px 32px rgba(124,106,247,.45); transform: translateY(-1px); }
-  .btn-hero-secondary {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 13px 28px;
-    border-radius: 10px;
-    background: rgba(255,255,255,.06);
-    color: #c8c8d4;
-    font-size: 15px;
-    font-weight: 500;
-    text-decoration: none;
-    border: 1px solid rgba(255,255,255,.1);
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
-  }
-  .btn-hero-secondary:hover { background: rgba(255,255,255,.1); color: #f0f0f8; border-color: rgba(255,255,255,.2); }
-
-  /* ── Editor preview card ── */
-  .editor-preview {
-    width: 100%;
-    max-width: 900px;
-    border-radius: 16px;
-    overflow: hidden;
-    border: 1px solid rgba(255,255,255,.08);
-    box-shadow: 0 32px 80px rgba(0,0,0,.6), 0 0 0 0.5px rgba(255,255,255,.04) inset;
-    background: #111113;
-    margin-bottom: 80px;
-  }
-  .preview-titlebar {
-    height: 36px;
-    background: #0d0d0f;
-    border-bottom: 1px solid #1e1e28;
-    display: flex;
-    align-items: center;
-    padding: 0 14px;
-    gap: 6px;
-  }
-  .preview-dot { width: 10px; height: 10px; border-radius: 50%; }
-  .preview-dot-1 { background: #ff5f57; }
-  .preview-dot-2 { background: #ffbd2e; }
-  .preview-dot-3 { background: #28ca41; }
-  .preview-body {
-    display: grid;
-    grid-template-columns: 180px 1fr;
-    height: 320px;
-  }
-  .preview-sidebar {
-    background: #0d0d0f;
-    border-right: 1px solid #1e1e28;
-    padding: 10px 0;
-    overflow: hidden;
-  }
-  .preview-sidebar-header {
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: .12em;
-    color: #6b6b7e;
-    padding: 4px 14px 8px;
-    text-transform: uppercase;
-  }
-  .preview-file {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 14px;
-    font-size: 12px;
-    color: #c8c8d4;
-    cursor: default;
-  }
-  .preview-file.active { background: rgba(124,106,247,.12); color: #f0f0f8; }
-  .preview-file-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-  .preview-code {
-    padding: 14px 20px;
-    font-family: 'Cascadia Code', Consolas, monospace;
-    font-size: 12px;
-    line-height: 1.7;
-    overflow: hidden;
-    color: #c8c8d4;
-  }
-  .t-kw { color: #bd93f9; }
-  .t-fn { color: #7ec8e3; }
-  .t-str { color: #98c379; }
-  .t-cm { color: #5a5a7a; font-style: italic; }
-  .t-num { color: #e5a96a; }
-  .t-cls { color: #e5a96a; }
-  .ln { color: #3a3a52; margin-right: 20px; display: inline-block; width: 20px; text-align: right; user-select: none; }
-
-  /* ── Features ── */
-  .features {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 16px;
-    max-width: 900px;
-    width: 100%;
-    margin-bottom: 80px;
-  }
-  .feature-card {
-    background: rgba(255,255,255,.03);
-    border: 1px solid rgba(255,255,255,.07);
-    border-radius: 14px;
-    padding: 24px;
-    text-align: left;
-    transition: background 200ms ease, border-color 200ms ease;
-  }
-  .feature-card:hover { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
-  .feature-icon {
-    width: 38px; height: 38px;
-    border-radius: 9px;
-    background: rgba(124,106,247,.15);
+  .tb-btn-ghost { background: rgba(255,255,255,.06); color: var(--text); border: 1px solid rgba(255,255,255,.1); }
+  .tb-btn-ghost:hover { background: rgba(255,255,255,.1); color: var(--text-bright); }
+  .tb-btn-accent { background: var(--accent); color: #fff; }
+  .tb-btn-accent:hover { opacity: .88; }
+  .tb-avatar {
+    width: 24px; height: 24px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    margin-bottom: 14px;
-    color: #7c6af7;
-  }
-  .feature-title { font-size: 14px; font-weight: 600; color: #f0f0f8; margin-bottom: 6px; }
-  .feature-desc { font-size: 13px; color: #6b6b7e; line-height: 1.6; }
-
-  /* ── Footer ── */
-  footer {
-    position: relative; z-index: 1;
-    text-align: center;
-    padding: 24px;
-    font-size: 12px;
-    color: #3e3e52;
-    border-top: 1px solid #1e1e28;
+    font-size: 10px; font-weight: 700; color: #fff; cursor: pointer;
+    flex-shrink: 0;
   }
 
-  /* ── Responsive ── */
-  @media (max-width: 640px) {
-    nav { padding: 0 16px; }
-    .nav-links .nav-btn-ghost { display: none; }
-    main { padding: 120px 16px 60px; }
-    .preview-body { grid-template-columns: 1fr; }
-    .preview-sidebar { display: none; }
-    .hero-actions { flex-direction: column; align-items: center; }
-    .btn-hero-primary, .btn-hero-secondary { width: 100%; max-width: 320px; justify-content: center; }
+  /* ─── Main ─────────────────────────────────────────────────── */
+  main { flex: 1; overflow-y: auto; display: flex; justify-content: center; padding: 52px 24px 80px; }
+  .content { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 32px; }
+
+  /* ─── Logo ──────────────────────────────────────────────────── */
+  .logo-row { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: var(--accent-dim); border: 1px solid rgba(124,106,247,.28);
+    display: flex; align-items: center; justify-content: center; color: var(--accent);
+  }
+  .logo-text { display: flex; flex-direction: column; gap: 2px; }
+  .logo-name { font-size: 22px; font-weight: 700; color: var(--text-bright); letter-spacing: -.025em; }
+  .logo-sub { font-size: 12px; color: var(--text-muted); }
+
+  /* ─── Quick actions ─────────────────────────────────────────── */
+  .quick { display: flex; gap: 8px; flex-wrap: wrap; }
+  .qbtn {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--bg-card);
+    color: var(--text); font-size: 13px; cursor: pointer;
+    text-decoration: none; font-family: inherit;
+    transition: background 120ms, border-color 120ms, color 120ms;
+    flex: 1; min-width: 150px;
+  }
+  .qbtn:hover { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.12); color: var(--text-bright); }
+  .qbtn:hover .qbtn-icon { color: var(--accent); }
+  .qbtn-icon { color: var(--text-muted); flex-shrink: 0; transition: color 120ms; }
+  .qbtn-label { font-weight: 500; font-size: 13px; }
+  .qbtn-sub { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+  /* ─── Section ───────────────────────────────────────────────── */
+  .section { display: flex; flex-direction: column; gap: 8px; }
+  .section-hdr { display: flex; align-items: center; justify-content: space-between; }
+  .section-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+  .section-link { font-size: 11px; color: var(--accent); background: none; border: none; font-family: inherit; padding: 0; cursor: pointer; text-decoration: none; }
+  .section-link:hover { text-decoration: underline; }
+
+  /* ─── Project rows ──────────────────────────────────────────── */
+  .proj-list { display: flex; flex-direction: column; }
+  .proj-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 8px; border-radius: 8px; cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 100ms, border-color 100ms;
+  }
+  .proj-row:hover { background: rgba(255,255,255,.035); border-color: var(--border); }
+  .proj-row:hover .proj-arrow { opacity: 1; }
+  .proj-icon {
+    width: 28px; height: 28px; border-radius: 7px;
+    background: var(--accent-dim); border: 1px solid rgba(124,106,247,.2);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent); flex-shrink: 0;
+  }
+  .proj-icon.sh { background: rgba(97,175,239,.1); border-color: rgba(97,175,239,.2); color: #61afef; }
+  .proj-info { flex: 1; min-width: 0; }
+  .proj-name { font-size: 13px; font-weight: 500; color: var(--text-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .proj-meta { font-size: 11px; color: var(--text-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .proj-badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: var(--accent-dim); color: var(--accent); flex-shrink: 0; }
+  .proj-badge.viewer { background: rgba(97,175,239,.1); color: #61afef; }
+  .proj-arrow { opacity: 0; transition: opacity 100ms; color: var(--text-muted); flex-shrink: 0; }
+  .empty-state { padding: 12px 8px; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+  .loading-state { padding: 12px 8px; color: var(--text-muted); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { animation: spin 1s linear infinite; }
+
+  /* ─── Collab card ───────────────────────────────────────────── */
+  .card { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); overflow: hidden; }
+  .card-hdr { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .card-hdr-icon { width: 30px; height: 30px; border-radius: 7px; background: var(--accent-dim); border: 1px solid rgba(124,106,247,.22); display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
+  .card-hdr-title { font-size: 13px; font-weight: 600; color: var(--text-bright); }
+  .card-hdr-sub { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .card-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  .input-row { display: flex; gap: 7px; }
+  .inp {
+    flex: 1; height: 30px; background: rgba(255,255,255,.04); border: 1px solid var(--border);
+    border-radius: 7px; color: var(--text-bright); font-size: 12px; font-family: inherit;
+    padding: 0 10px; outline: none; transition: border-color 150ms; user-select: text;
+  }
+  .inp:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(124,106,247,.14); }
+  .inp::placeholder { color: var(--text-muted); }
+  .inp-btn {
+    height: 30px; padding: 0 14px; border: none; border-radius: 7px;
+    background: var(--accent); color: #fff; font-size: 12px; font-weight: 600;
+    font-family: inherit; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    transition: opacity 150ms;
+  }
+  .inp-btn:hover { opacity: .88; }
+  .inp-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .or-divider { display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 11px; }
+  .or-divider::before, .or-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .tip { font-size: 11px; color: var(--text-muted); line-height: 1.65; }
+  .tip strong { color: var(--text); font-weight: 600; }
+
+  .session-pill {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    border-radius: 8px; background: rgba(78,201,148,.07); border: 1px solid rgba(78,201,148,.2);
+    font-size: 12px; color: var(--green);
+  }
+  .session-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px rgba(78,201,148,.5); animation: pulse 2s ease infinite; flex-shrink: 0; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.45} }
+  .session-link { margin-left: auto; color: var(--accent); font-size: 11px; text-decoration: none; background: none; border: none; font-family: inherit; cursor: pointer; }
+  .session-link:hover { text-decoration: underline; }
+
+  /* ─── Sign-in ────────────────────────────────────────────────── */
+  .signin-box { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .signin-box-title { font-size: 13px; font-weight: 600; color: var(--text-bright); }
+  .signin-box-desc { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+  .signin-btns { display: flex; gap: 7px; }
+  .si-btn { height: 28px; padding: 0 14px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer; transition: opacity 150ms, background 150ms; }
+  .si-primary { background: var(--accent); color: #fff; }
+  .si-primary:hover { opacity: .88; }
+  .si-ghost { background: rgba(255,255,255,.06); color: var(--text); border: 1px solid rgba(255,255,255,.1); }
+  .si-ghost:hover { background: rgba(255,255,255,.1); color: var(--text-bright); }
+
+  /* ─── Status bar ────────────────────────────────────────────── */
+  .statusbar { height: 22px; background: var(--status-bg, #6155d4); display: flex; align-items: center; padding: 0 10px; gap: 14px; font-size: 11px; color: rgba(255,255,255,.85); flex-shrink: 0; }
+  .sb-item { display: flex; align-items: center; gap: 4px; cursor: default; }
+
+  /* ─── Responsive ─────────────────────────────────────────────── */
+  @media (max-width: 520px) {
+    main { padding: 36px 14px 60px; }
+    .quick { flex-direction: column; }
+    .qbtn { min-width: 0; }
+    .tb-search { width: min(200px, 36vw); }
   }
 </style>
 </head>
 <body>
+<div class="app">
 
-<div class="glow-1"></div>
-<div class="glow-2"></div>
-
-<!-- Nav -->
-<nav>
-  <a class="nav-logo" href="home.html">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-      <polyline points="16 18 22 12 16 6"/>
-      <polyline points="8 6 2 12 8 18"/>
-    </svg>
-    VS Code Online
-  </a>
-  <div class="nav-links">
-    <a class="nav-btn-ghost" href="index.html">Open Editor</a>
-    <a class="nav-btn-primary" href="index.html">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-      Get Started
-    </a>
-  </div>
-</nav>
-
-<!-- Hero -->
-<main>
-  <div class="badge">
-    <div class="badge-dot"></div>
-    Now with real-time collaboration
-  </div>
-
-  <h1>Code from<br><span class="accent">anywhere,</span><br>together.</h1>
-
-  <p class="subtitle">
-    A full VS Code experience in your browser. Open any project, write code with Monaco editor, run a terminal, and collaborate live with your team.
-  </p>
-
-  <div class="hero-actions">
-    <a class="btn-hero-primary" href="index.html">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 3 3-3 3"/><line x1="13" y1="15" x2="15" y2="15"/></svg>
-      Open Editor
-    </a>
-    <a class="btn-hero-secondary" href="index.html">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      Start Collaborating
-    </a>
-  </div>
-
-  <!-- Editor preview -->
-  <div class="editor-preview">
-    <div class="preview-titlebar">
-      <div class="preview-dot preview-dot-1"></div>
-      <div class="preview-dot preview-dot-2"></div>
-      <div class="preview-dot preview-dot-3"></div>
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <div class="tb-left">
+      <a class="tb-logo" href="home.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        VS Code Online
+      </a>
     </div>
-    <div class="preview-body">
-      <div class="preview-sidebar">
-        <div class="preview-sidebar-header">Explorer</div>
-        <div class="preview-file active">
-          <div class="preview-file-dot" style="background:#e8c84a"></div>
-          app.js
+    <div class="tb-center">
+      <div class="tb-search" onclick="window.location.href='index.html'">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" style="opacity:.4;flex-shrink:0"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zM5.5 11a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/></svg>
+        <span style="flex:1">Search or open file…</span>
+        <kbd>Ctrl P</kbd>
+      </div>
+    </div>
+    <div class="tb-right">
+      <div class="tb-avatar" id="nav-avatar" style="display:none;background:#7c6af7"></div>
+      <a class="tb-btn tb-btn-accent" href="index.html">Open Editor</a>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <main>
+    <div class="content">
+
+      <!-- Logo -->
+      <div class="logo-row">
+        <div class="logo-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
         </div>
-        <div class="preview-file">
-          <div class="preview-file-dot" style="background:#264de4"></div>
-          style.css
-        </div>
-        <div class="preview-file">
-          <div class="preview-file-dot" style="background:#e44d26"></div>
-          index.html
-        </div>
-        <div class="preview-file">
-          <div class="preview-file-dot" style="background:#cbcb41"></div>
-          package.json
+        <div class="logo-text">
+          <div class="logo-name">VS Code Online</div>
+          <div class="logo-sub" id="user-greeting">Free for everyone. Sign in to save to the cloud.</div>
         </div>
       </div>
-      <div class="preview-code">
-        <div><span class="ln">1</span><span class="t-cm">// VS Code Online — real-time collab</span></div>
-        <div><span class="ln">2</span></div>
-        <div><span class="ln">3</span><span class="t-kw">import</span> <span class="t-fn">express</span> <span class="t-kw">from</span> <span class="t-str">'express'</span>;</div>
-        <div><span class="ln">4</span><span class="t-kw">import</span> { <span class="t-fn">createServer</span> } <span class="t-kw">from</span> <span class="t-str">'http'</span>;</div>
-        <div><span class="ln">5</span></div>
-        <div><span class="ln">6</span><span class="t-kw">const</span> <span class="t-fn">app</span> = <span class="t-fn">express</span>();</div>
-        <div><span class="ln">7</span><span class="t-kw">const</span> <span class="t-fn">PORT</span> = process.<span class="t-fn">env</span>.PORT || <span class="t-num">3000</span>;</div>
-        <div><span class="ln">8</span></div>
-        <div><span class="ln">9</span><span class="t-fn">app</span>.<span class="t-fn">get</span>(<span class="t-str">'/'</span>, (<span class="t-fn">req</span>, <span class="t-fn">res</span>) => {</div>
-        <div><span class="ln">10</span>  <span class="t-fn">res</span>.<span class="t-fn">send</span>(<span class="t-str">'Hello from VS Code Online!'</span>);</div>
-        <div><span class="ln">11</span>});</div>
-        <div><span class="ln">12</span></div>
-        <div><span class="ln">13</span><span class="t-fn">app</span>.<span class="t-fn">listen</span>(<span class="t-fn">PORT</span>, () => {</div>
-        <div><span class="ln">14</span>  console.<span class="t-fn">log</span>(<span class="t-str">`Server running on port <span class="t-num">${PORT}</span>`</span>);</div>
-        <div><span class="ln">15</span>});</div>
+
+      <!-- Quick actions -->
+      <div class="quick">
+        <a class="qbtn" href="index.html">
+          <svg class="qbtn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <div><div class="qbtn-label">Open project</div><div class="qbtn-sub">Open a local folder</div></div>
+        </a>
+        <div class="qbtn" onclick="goToCloud()">
+          <svg class="qbtn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+          <div><div class="qbtn-label">Cloud projects</div><div class="qbtn-sub">Open from the cloud</div></div>
+        </div>
+        <div class="qbtn" onclick="document.getElementById('join-inp').focus()">
+          <svg class="qbtn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <div><div class="qbtn-label">Join session</div><div class="qbtn-sub">Paste a share link</div></div>
+        </div>
       </div>
+
+      <!-- Recent projects -->
+      <div class="section">
+        <div class="section-hdr">
+          <span class="section-title">Recent projects</span>
+          <button class="section-link" onclick="goToCloud()">View all</button>
+        </div>
+        <div class="proj-list" id="proj-list">
+          <div class="loading-state">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            Loading…
+          </div>
+        </div>
+      </div>
+
+      <!-- Collaboration -->
+      <div class="section">
+        <div class="section-hdr">
+          <span class="section-title">Collaboration</span>
+        </div>
+        <div class="card">
+          <div class="card-hdr">
+            <div class="card-hdr-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div>
+              <div class="card-hdr-title">Real-time collaboration</div>
+              <div class="card-hdr-sub">Code together with live cursors and instant sync</div>
+            </div>
+          </div>
+          <div class="card-body">
+
+            <div id="active-session-row" style="display:none">
+              <div class="session-pill">
+                <div class="session-dot"></div>
+                <span id="active-session-text">Active session</span>
+                <button class="session-link" onclick="resumeSession()">Resume →</button>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Join a session</div>
+              <div class="input-row">
+                <input id="join-inp" class="inp" type="url" placeholder="Paste share link (https://…?project=…)" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')joinSession()">
+                <button class="inp-btn" onclick="joinSession()">Join</button>
+              </div>
+            </div>
+
+            <div class="or-divider">or start a session</div>
+
+            <div class="tip">
+              Open a project in the editor, save it to the cloud with <strong>File → Save to Cloud</strong>,
+              then click <strong>Share</strong> in the titlebar to invite collaborators by email or share link.
+              Collaborators join instantly — no account needed to view.
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Sign-in box (shown when not signed in) -->
+      <div class="signin-box" id="signin-box" style="display:none">
+        <div class="signin-box-title">Sign in to unlock cloud features</div>
+        <div class="signin-box-desc">Save projects, access them from any device, and collaborate with your team in real time.</div>
+        <div class="signin-btns">
+          <button class="si-btn si-primary" onclick="goAuth('signin')">Sign In</button>
+          <button class="si-btn si-ghost" onclick="goAuth('signup')">Create Account</button>
+        </div>
+      </div>
+
     </div>
+  </main>
+
+  <!-- Status bar -->
+  <div class="statusbar">
+    <div class="sb-item">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      VS Code Online
+    </div>
+    <div class="sb-item" id="sb-user">Not signed in</div>
   </div>
 
-  <!-- Feature cards -->
-  <div class="features">
-    <div class="feature-card">
-      <div class="feature-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-      </div>
-      <div class="feature-title">Monaco Editor</div>
-      <div class="feature-desc">The same editor that powers VS Code, running entirely in your browser with full syntax highlighting.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      </div>
-      <div class="feature-title">Real-time Collaboration</div>
-      <div class="feature-desc">Share a link and code together instantly. See live cursors and changes from your teammates in real time.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-      </div>
-      <div class="feature-title">Cloud Projects</div>
-      <div class="feature-desc">Save your projects to the cloud and access them from any device. Your work, always in sync.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-      </div>
-      <div class="feature-title">Integrated Terminal</div>
-      <div class="feature-desc">Run npm, build your project, and execute code — all without leaving the browser.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      </div>
-      <div class="feature-title">Fully Customizable</div>
-      <div class="feature-desc">Choose from multiple themes, font sizes, key bindings, and more. Make it yours.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-      </div>
-      <div class="feature-title">Works Offline</div>
-      <div class="feature-desc">Install as a PWA and keep coding even without an internet connection. Your files stay local.</div>
-    </div>
-  </div>
-</main>
+</div>
+<script>
+const _sb = supabase.createClient(
+  'https://umnfmakvsllgftfttafd.supabase.co',
+  'sb_publishable_B9QmLcwTSCC3bBPA2g4Hnw_AcDDRfWA'
+);
+let _user = null;
 
-<footer>
-  © 2025 VS Code Online · Built with Monaco Editor &amp; Supabase
-</footer>
+async function init() {
+  try {
+    const { data: { session } } = await _sb.auth.getSession();
+    _user = session?.user || null;
+  } catch(e) { _user = null; }
 
+  updateTopbar();
+
+  if (_user) {
+    loadProjects();
+  } else {
+    document.getElementById('signin-box').style.display = 'flex';
+    document.getElementById('proj-list').innerHTML = '<div class="empty-state">Sign in to see your cloud projects here</div>';
+  }
+
+  // Check for active collab session
+  const lastUrl = sessionStorage.getItem('lastCollabUrl');
+  if (lastUrl && lastUrl.includes('?project=')) {
+    document.getElementById('active-session-row').style.display = 'block';
+    try {
+      const id = new URL(lastUrl).searchParams.get('project');
+      document.getElementById('active-session-text').textContent = 'Active session · ' + id.slice(0,8) + '…';
+    } catch {}
+  }
+
+  // Auto-open auth modal if redirected here
+  const authAction = sessionStorage.getItem('authAction');
+  if (authAction) {
+    sessionStorage.removeItem('authAction');
+    window.location.href = 'index.html#auth-' + authAction;
+  }
+}
+
+function updateTopbar() {
+  const greeting = document.getElementById('user-greeting');
+  const sbUser   = document.getElementById('sb-user');
+  const avatar   = document.getElementById('nav-avatar');
+
+  if (_user) {
+    const name = _user.user_metadata?.full_name || _user.email?.split('@')[0] || 'User';
+    greeting.textContent = 'Welcome back, ' + name;
+    sbUser.textContent   = _user.email || name;
+    const initials = name.split(/\s+/).map(w => w[0]).join('').slice(0,2).toUpperCase();
+    avatar.textContent   = initials;
+    avatar.style.display = 'flex';
+    document.getElementById('signin-box').style.display = 'none';
+  } else {
+    greeting.textContent = 'Free for everyone. Sign in to save to the cloud.';
+    sbUser.textContent   = 'Not signed in';
+    avatar.style.display = 'none';
+  }
+}
+
+async function loadProjects() {
+  const list = document.getElementById('proj-list');
+  try {
+    const [{ data: own }, { data: shared }] = await Promise.all([
+      _sb.from('projects').select('id,name,updated_at').eq('owner_id', _user.id).order('updated_at', { ascending: false }).limit(6),
+      _sb.from('collaborators').select('project_id,role,projects(id,name,updated_at)').eq('user_id', _user.id).eq('accepted', true).limit(4)
+    ]);
+
+    const sharedProjects = (shared || []).map(c => ({ ...c.projects, role: c.role, isShared: true })).filter(Boolean);
+    const all = [...(own || []).map(p => ({ ...p, isShared: false })), ...sharedProjects]
+      .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 8);
+
+    if (!all.length) {
+      list.innerHTML = '<div class="empty-state">No cloud projects yet — open a folder and save it with <strong>File → Save to Cloud</strong></div>';
+      return;
+    }
+    list.innerHTML = '';
+    all.forEach(p => list.appendChild(mkProjectRow(p)));
+  } catch(e) {
+    list.innerHTML = '<div class="empty-state" style="color:var(--red)">Failed to load: ' + esc(e.message) + '</div>';
+  }
+}
+
+function mkProjectRow(p) {
+  const ago = timeAgo(new Date(p.updated_at));
+  const row = document.createElement('div');
+  row.className = 'proj-row';
+  row.innerHTML = `
+    <div class="proj-icon${p.isShared ? ' sh' : ''}">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        ${p.isShared ? '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>' : '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>'}
+      </svg>
+    </div>
+    <div class="proj-info">
+      <div class="proj-name">${esc(p.name)}</div>
+      <div class="proj-meta">${ago}${p.isShared ? ' · shared' : ''}</div>
+    </div>
+    ${p.isShared ? `<span class="proj-badge${p.role==='viewer'?' viewer':''}">${p.role}</span>` : ''}
+    <div class="proj-arrow">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/></svg>
+    </div>
+  `;
+  row.onclick = () => {
+    sessionStorage.setItem('openCloudProject', JSON.stringify({ id: p.id, name: p.name }));
+    window.location.href = 'index.html';
+  };
+  return row;
+}
+
+function goToCloud() {
+  sessionStorage.setItem('openCloudOnLoad', '1');
+  window.location.href = 'index.html';
+}
+
+function joinSession() {
+  const val = document.getElementById('join-inp').value.trim();
+  if (!val) { document.getElementById('join-inp').focus(); return; }
+  let projectId = val;
+  try { projectId = new URL(val).searchParams.get('project') || val; } catch {}
+  if (!projectId) return;
+  sessionStorage.setItem('lastCollabUrl', location.origin + '/index.html?project=' + projectId);
+  window.location.href = 'index.html?project=' + projectId;
+}
+
+function resumeSession() {
+  const url = sessionStorage.getItem('lastCollabUrl');
+  if (url) window.location.href = url;
+}
+
+function goAuth(action) {
+  sessionStorage.setItem('authAction', action);
+  window.location.href = 'index.html';
+}
+
+function timeAgo(d) {
+  const s = Math.floor((Date.now() - d) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  if (s < 604800) return Math.floor(s/86400) + 'd ago';
+  return d.toLocaleDateString();
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+init();
+</script>
 </body>
 </html>
