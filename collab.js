@@ -194,11 +194,13 @@ function _startCollabSession() {
   // Subscribe and track own presence
   _realtimeChannel.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
+      const myAvatarUrl = currentUser?.user_metadata?.avatar_url || null;
       await _realtimeChannel.track({
-        clientId: _clientId,
-        name:     myName,
-        color:    myColor,
-        file:     currentFile1 || null,
+        clientId:  _clientId,
+        name:      myName,
+        color:     myColor,
+        avatarUrl: myAvatarUrl,
+        file:      currentFile1 || null,
       });
     }
   });
@@ -261,41 +263,238 @@ async function _syncFileToCloud(path, content) {
   }, { onConflict: 'project_id,path' });
 }
 
+
 /* ================================================================
-   SHARE BUTTON — copy link to clipboard
+   SHARE PANEL — Canva-style dropdown
    ================================================================ */
-function collabShare() {
+let _sharePanelOpen = false;
+
+function openSharePanel() {
   if (!_collabProjectId) {
-    // Not in a collab session yet — prompt to save to cloud first
-    if (typeof printToOutput === 'function') printToOutput('Save your project to the cloud first (File → Save to Cloud), then share.', '#cbcb41');
+    if (typeof printToOutput === 'function') printToOutput('Save your project to the cloud first (File → Save to Cloud).', '#cbcb41');
     return;
   }
+  const panel = document.getElementById('share-panel');
+  if (!panel) return;
+  if (_sharePanelOpen) { closeSharePanel(); return; }
+  _sharePanelOpen = true;
+  panel.style.display = 'block';
+  _loadSharePeople();
+  setTimeout(() => { document.addEventListener('click', _sharePanelOutsideClick, { once: true }); }, 10);
+}
+window.openSharePanel = openSharePanel;
+
+function closeSharePanel() {
+  const panel = document.getElementById('share-panel');
+  if (panel) panel.style.display = 'none';
+  _sharePanelOpen = false;
+  const msg = document.getElementById('share-invite-msg');
+  if (msg) { msg.textContent = ''; msg.className = 'share-invite-msg'; }
+  const input = document.getElementById('share-email-input');
+  if (input) input.value = '';
+}
+window.closeSharePanel = closeSharePanel;
+
+function _sharePanelOutsideClick(e) {
+  const panel = document.getElementById('share-panel');
+  const shareBtn = document.getElementById('share-btn');
+  const addBtn = document.getElementById('collab-add-btn');
+  if (panel && !panel.contains(e.target) &&
+      !shareBtn?.contains(e.target) &&
+      !addBtn?.contains(e.target)) {
+    closeSharePanel();
+  } else if (_sharePanelOpen) {
+    setTimeout(() => { document.addEventListener('click', _sharePanelOutsideClick, { once: true }); }, 10);
+  }
+}
+
+async function _loadSharePeople() {
+  const list = document.getElementById('share-people-list');
+  if (!list) return;
+  list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">Loading…</div>';
+  try {
+    const { data: project } = await _supabase
+      .from('projects')
+      .select('owner_id, profiles(id, full_name, avatar_url)')
+      .eq('id', _collabProjectId)
+      .single();
+
+    const { data: collabs } = await _supabase
+      .from('collaborators')
+      .select('id, email, role, accepted, user_id, profiles(id, full_name, avatar_url)')
+      .eq('project_id', _collabProjectId);
+
+    list.innerHTML = '';
+
+    // Owner row
+    if (project) {
+      const p = project.profiles;
+      const isMe = currentUser && currentUser.id === project.owner_id;
+      list.appendChild(_personRow({
+        name: (p?.full_name || 'Owner') + (isMe ? ' (you)' : ''),
+        email: '', avatarUrl: p?.avatar_url || null,
+        color: _hashColorFromId(project.owner_id), badge: 'Owner', isOwner: true,
+      }));
+    }
+
+    const canEdit = !!(currentUser && project && currentUser.id === project.owner_id);
+    (collabs || []).forEach(c => {
+      const p = c.profiles;
+      const isMe = currentUser && currentUser.id === c.user_id;
+      list.appendChild(_personRow({
+        name: (p?.full_name || c.email || 'Pending') + (isMe ? ' (you)' : '') + (!c.accepted ? ' — pending' : ''),
+        email: c.email || '', avatarUrl: p?.avatar_url || null,
+        color: _hashColorFromId(c.user_id || c.email),
+        role: c.role, collabId: c.id, canEdit, isOwner: false,
+      }));
+    });
+
+    if (!collabs || collabs.length === 0) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'color:var(--text-muted);font-size:12px;padding:4px 8px';
+      empty.textContent = 'Only you have access — invite someone above';
+      list.appendChild(empty);
+    }
+  } catch(e) {
+    list.innerHTML = `<div style="color:var(--red);font-size:12px;padding:8px 0">${_escHtml(e.message)}</div>`;
+  }
+}
+
+function _personRow({ name, email, avatarUrl, color, badge, role, collabId, canEdit, isOwner }) {
+  const row = document.createElement('div');
+  row.className = 'share-person';
+  const initials = _initialsFromName(name);
+  const avatarHtml = avatarUrl
+    ? `<img src="${avatarUrl}" alt="">`
+    : initials;
+
+  let roleHtml = '';
+  if (isOwner) {
+    roleHtml = `<span class="share-person-owner-badge">Owner</span>`;
+  } else if (canEdit) {
+    roleHtml = `
+      <div class="share-person-role">
+        <select onchange="shareChangeRole('${collabId}', this.value)">
+          <option value="editor" ${role === 'editor' ? 'selected' : ''}>Editor</option>
+          <option value="viewer" ${role === 'viewer' ? 'selected' : ''}>Viewer</option>
+        </select>
+      </div>
+      <div class="share-person-remove" onclick="shareRemovePerson('${collabId}')" title="Remove">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+      </div>`;
+  } else {
+    roleHtml = `<span style="font-size:11px;color:var(--text-muted)">${role || 'editor'}</span>`;
+  }
+
+  row.innerHTML = `
+    <div class="share-person-avatar" style="background:${color}">${avatarHtml}</div>
+    <div class="share-person-info">
+      <div class="share-person-name">${_escHtml(name)}</div>
+      ${email ? `<div class="share-person-email">${_escHtml(email)}</div>` : ''}
+    </div>
+    ${roleHtml}
+  `;
+  return row;
+}
+
+function _initialsFromName(name) {
+  return (name || '?').replace(/\s*\(.*?\)/g, '').trim()
+    .split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase() || '?';
+}
+function _hashColorFromId(id) {
+  const palette = ['#7c6af7','#e06c75','#61afef','#98c379','#e5c07b','#c678dd','#56b6c2','#d19a66'];
+  let h = 0; const s = String(id || '');
+  for (let i = 0; i < s.length; i++) h = s.charCodeAt(i) + ((h << 5) - h);
+  return palette[Math.abs(h) % palette.length];
+}
+
+async function shareInvite() {
+  const input = document.getElementById('share-email-input');
+  const roleSelect = document.getElementById('share-role-select');
+  const btn = document.querySelector('.share-invite-btn');
+  const email = input?.value?.trim().toLowerCase();
+  if (!email || !email.includes('@')) { _setShareMsg('Enter a valid email address.', true); return; }
+  if (!currentUser) { _setShareMsg('You must be signed in to invite people.', true); return; }
+  if (!_collabProjectId) { _setShareMsg('No active project.', true); return; }
+  const role = roleSelect?.value || 'editor';
+  if (btn) btn.disabled = true;
+  _setShareMsg('Sending invite…', false);
+  try {
+    const { data: existing } = await _supabase.from('collaborators').select('id').eq('project_id', _collabProjectId).eq('email', email).single();
+    if (existing) { _setShareMsg('This person already has access.', true); return; }
+    const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const { error } = await _supabase.from('collaborators').insert({ project_id: _collabProjectId, email, role, invite_token: token, accepted: false });
+    if (error) throw error;
+    _setShareMsg(`✓ Invited ${email} as ${role}`, false);
+    if (input) input.value = '';
+    _loadSharePeople();
+  } catch(e) {
+    _setShareMsg(e.message, true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.shareInvite = shareInvite;
+
+function _setShareMsg(text, isError) {
+  const msg = document.getElementById('share-invite-msg');
+  if (!msg) return;
+  msg.textContent = text;
+  msg.className = 'share-invite-msg' + (isError ? ' error' : '');
+}
+
+async function shareChangeRole(collabId, role) {
+  await _supabase.from('collaborators').update({ role }).eq('id', collabId);
+}
+window.shareChangeRole = shareChangeRole;
+
+async function shareRemovePerson(collabId) {
+  await _supabase.from('collaborators').delete().eq('id', collabId);
+  _loadSharePeople();
+}
+window.shareRemovePerson = shareRemovePerson;
+
+function shareCopyLink() {
+  if (!_collabProjectId) return;
   const url = `${window.location.origin}${window.location.pathname}?project=${_collabProjectId}`;
   navigator.clipboard.writeText(url).then(() => {
-    // Flash the button to confirm
-    const btn = document.getElementById('share-btn');
+    const btn = document.querySelector('.share-copy-btn');
     if (btn) {
       const orig = btn.innerHTML;
       btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg> Copied!`;
       setTimeout(() => { btn.innerHTML = orig; }, 2000);
     }
-    if (typeof printToOutput === 'function') printToOutput(`Share link copied: ${url}`, '#89d185');
-  }).catch(() => {
-    prompt('Copy this link to share:', `${window.location.origin}${window.location.pathname}?project=${_collabProjectId}`);
-  });
+  }).catch(() => prompt('Copy this link:', url));
 }
-window.collabShare = collabShare;
+window.shareCopyLink = shareCopyLink;
 
-/* ── Show the share button ──────────────────────────────────────── */
+function collabLeave() {
+  closeSharePanel();
+  _stopCollabSession();
+  window.history.replaceState({}, '', window.location.pathname);
+  document.getElementById('app-body')?.classList.remove('collab-active');
+  if (typeof printToOutput === 'function') printToOutput('Left collaboration session.', '#858585');
+}
+window.collabLeave = collabLeave;
+
+// Alias for old references
+window.collabShare = openSharePanel;
+
+/* ── Show / hide share UI ────────────────────────────────────────── */
 function _showShareBtn() {
   const btn = document.getElementById('share-btn');
   if (btn) btn.style.display = 'flex';
+  document.getElementById('app-body')?.classList.add('collab-active');
 }
 
 /* ── Hide the share button ──────────────────────────────────────── */
 function _hideShareBtn() {
   const btn = document.getElementById('share-btn');
+  const addBtn = document.getElementById('collab-add-btn');
   if (btn) btn.style.display = 'none';
+  if (addBtn) addBtn.style.display = 'none';
+  document.getElementById('app-body')?.classList.remove('collab-active');
+  closeSharePanel();
 }
 
 /* ================================================================
@@ -362,15 +561,33 @@ window.addEventListener('DOMContentLoaded', () => {
    ================================================================ */
 function _renderPresence() {
   const el = document.getElementById('collab-presence');
+  const addBtn = document.getElementById('collab-add-btn');
   if (!el) return;
 
   const peerList = Object.values(_peers);
-  if (peerList.length === 0) { el.innerHTML = ''; return; }
+  if (peerList.length === 0) {
+    el.innerHTML = '';
+    if (addBtn) addBtn.style.display = 'none';
+    return;
+  }
 
-  el.innerHTML = peerList.map(p => {
-    const initials = (p.name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
-    return `<div class="collab-avatar" style="background:${p.color}" title="${_escHtml(p.name)}">${initials}</div>`;
-  }).join('');
+  // Show up to 4 peers, then a +N overflow
+  const MAX_SHOWN = 4;
+  const shown = peerList.slice(0, MAX_SHOWN);
+  const overflow = peerList.length - MAX_SHOWN;
+
+  el.innerHTML = shown.map(p => {
+    const initials = _initialsFromName(p.name);
+    const inner = p.avatarUrl
+      ? `<img src="${p.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" alt="">`
+      : initials;
+    return `<div class="collab-avatar" style="background:${p.color}" title="${_escHtml(p.name)}">${inner}</div>`;
+  }).join('') + (overflow > 0
+    ? `<div class="collab-avatar" style="background:var(--bg-active);color:var(--text-muted);font-size:9px" title="${overflow} more">+${overflow}</div>`
+    : '');
+
+  // Show the + button next to avatars
+  if (addBtn) addBtn.style.display = 'flex';
 }
 
 /* ================================================================

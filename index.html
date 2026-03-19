@@ -188,17 +188,63 @@
 
   <!-- Right zone: share button + collab avatars + WCO -->
   <div class="titlebar-right">
+    <!-- Presence avatars (shown when in collab session) -->
     <div id="collab-presence" class="collab-presence"></div>
-    <button id="share-btn" class="share-btn" onclick="collabShare()" title="Share project" style="display:none">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+
+    <!-- Plus / share icon shown next to presence avatars -->
+    <div id="collab-add-btn" class="collab-add-btn" onclick="openSharePanel()" title="Invite people" style="display:none">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/></svg>
+    </div>
+
+    <!-- Share button -->
+    <button id="share-btn" class="share-btn" onclick="openSharePanel()" title="Share project" style="display:none">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
       Share
     </button>
+  </div>
+
+  <!-- Share dropdown panel -->
+  <div id="share-panel" class="share-panel" style="display:none">
+    <div class="share-panel-title">Share Project</div>
+
+    <!-- Invite by email -->
+    <div class="share-invite-row">
+      <div class="share-invite-input-wrap">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:.45"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        <input type="email" id="share-email-input" class="share-email-input" placeholder="Invite by email…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')shareInvite()">
+      </div>
+      <select id="share-role-select" class="share-role-select">
+        <option value="editor">Editor</option>
+        <option value="viewer">Viewer</option>
+      </select>
+      <button class="share-invite-btn" onclick="shareInvite()">Invite</button>
+    </div>
+    <div id="share-invite-msg" class="share-invite-msg"></div>
+
+    <!-- People with access -->
+    <div class="share-section-label">People with access</div>
+    <div id="share-people-list" class="share-people-list"></div>
+
+    <!-- Divider -->
+    <div class="share-divider"></div>
+
+    <!-- Copy link + Leave -->
+    <div class="share-bottom-row">
+      <button class="share-copy-btn" onclick="shareCopyLink()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        Copy link
+      </button>
+      <button class="share-leave-btn" onclick="collabLeave()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Leave
+      </button>
+    </div>
   </div>
 
 </div>
 
 <!-- APP BODY -->
-<div class="app">
+<div class="app" id="app-body">
 
   <!-- Activity Bar -->
   <div class="activity-bar">

@@ -4123,6 +4123,7 @@ document.addEventListener('keydown', (e) => {
     if (aboutOverlay && aboutOverlay.style.display === 'flex') { e.preventDefault(); closeAbout(); }
     const authModalOverlay = document.getElementById('auth-modal-overlay');
     if (authModalOverlay && authModalOverlay.style.display === 'flex') { e.preventDefault(); if(typeof closeAuthModal==='function') closeAuthModal(); }
+    if (typeof closeSharePanel === 'function') closeSharePanel();
     closeContextMenu();
   }
 
