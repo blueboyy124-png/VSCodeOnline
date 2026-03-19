@@ -45,19 +45,27 @@ if ('windowControlsOverlay' in navigator) {
 function toggleSidebar() {
   if (window._sidebarToggle) window._sidebarToggle();
   else document.getElementById('sidebar').classList.toggle('open');
+  // Keep _currentActivityView in sync so same-icon toggle still works
+  // (Ctrl+B doesn't change the view, just open/close)
+}
+
+/* ── Helper: is the sidebar currently open? ────────────────────── */
+function _isSidebarOpen() {
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar) return false;
+  // Mobile: uses class
+  if (window.innerWidth <= 768) return sidebar.classList.contains('open');
+  // Desktop: width > 0
+  const w = parseInt(sidebar.style.width, 10);
+  return isNaN(w) || w > 0;
 }
 
 /* ── Activity view switcher ─────────────────────────────────────── */
 let _currentActivityView = 'explorer';
 window.switchActivityView = function(view) {
-  // If same view clicked again → toggle sidebar
-  if (_currentActivityView === view) {
-    toggleSidebar();
-    return;
-  }
-  _currentActivityView = view;
+  const alreadyActive = _currentActivityView === view;
 
-  // Update activity icon active state
+  // Update active icon highlight
   document.querySelectorAll('.activity-icon[id^="activity-"]').forEach(el => {
     el.classList.toggle('active', el.id === `activity-${view}`);
   });
@@ -68,17 +76,22 @@ window.switchActivityView = function(view) {
   if (explorerView) explorerView.style.display = view === 'explorer' ? 'flex' : 'none';
   if (cloudView)    cloudView.style.display    = view === 'cloud'    ? 'flex' : 'none';
 
-  // Make sure sidebar is open
-  if (window._sidebarToggle) {
-    const sidebar = document.getElementById('sidebar');
-    if (sidebar && (sidebar.style.width === '0px' || sidebar.classList.contains('collapsed'))) {
-      window._sidebarToggle();
-    }
+  if (alreadyActive) {
+    // Same icon clicked — toggle sidebar open/closed
+    toggleSidebar();
+    return;
+  }
+
+  _currentActivityView = view;
+
+  // If sidebar is closed, open it
+  if (!_isSidebarOpen()) {
+    if (window._sidebarToggle) window._sidebarToggle();
   }
 
   // If switching to cloud, load projects
-  if (view === 'cloud') {
-    if (typeof openCloudPanel === 'function') openCloudPanel();
+  if (view === 'cloud' && typeof openCloudPanel === 'function') {
+    openCloudPanel();
   }
 };
 
@@ -101,6 +114,17 @@ function toggleMenu(e, id) {
     if(el.id !== id + '-container') el.classList.remove('active');
   });
   document.getElementById(id + '-container').classList.toggle('active');
+
+  // Update Save to Cloud disabled state whenever the File menu opens
+  if (id === 'file-menu') {
+    const saveCloudBtn = document.getElementById('save-to-cloud-btn');
+    if (saveCloudBtn) {
+      const canSave = typeof projectFolder !== 'undefined' && projectFolder && typeof currentUser !== 'undefined' && currentUser;
+      saveCloudBtn.classList.toggle('disabled', !canSave);
+      saveCloudBtn.style.pointerEvents = canSave ? '' : 'none';
+      saveCloudBtn.style.opacity = canSave ? '' : '0.4';
+    }
+  }
 }
 
 document.addEventListener('click', () => {

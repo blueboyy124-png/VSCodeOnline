@@ -94,9 +94,13 @@ async function _joinFromLink(projectId) {
   _collabProjectName = project.name;
   _isOwner = !!(currentUser && currentUser.id === project.owner_id);
 
-  // Load files into editor
-  // Call the original cloudOpenProject (before collab.js wraps it)
-  await _origCloudOpen(project.id, project.name);
+  // Load files into editor — use whichever version is available
+  const openFn = _origCloudOpen || window.cloudOpenProject;
+  if (!openFn) {
+    if (typeof printToOutput === 'function') printToOutput('⚠ Editor not ready — please refresh the page.', '#f48771');
+    return;
+  }
+  await openFn(project.id, project.name);
 
   // Start real-time session
   _startCollabSession();
@@ -285,11 +289,7 @@ window.collabShare = collabShare;
 /* ── Show the share button ──────────────────────────────────────── */
 function _showShareBtn() {
   const btn = document.getElementById('share-btn');
-  if (btn) {
-    btn.style.display = 'flex';
-    btn.style.removeProperty('display'); // ensure no inline none
-    btn.style.display = 'flex';
-  }
+  if (btn) btn.style.display = 'flex';
 }
 
 /* ── Hide the share button ──────────────────────────────────────── */

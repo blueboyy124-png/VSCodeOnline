@@ -23,10 +23,21 @@ _supabase.auth.onAuthStateChange((event, session) => {
     if (typeof printToOutput === 'function') {
       printToOutput(`Signed in as ${name}`, '#89d185');
     }
+    // If the cloud panel is currently visible, refresh it now that we're signed in
+    const cloudView = document.getElementById('sidebar-cloud');
+    if (cloudView && cloudView.style.display !== 'none') {
+      if (typeof openCloudPanel === 'function') openCloudPanel();
+    }
   }
   if (event === 'SIGNED_OUT') {
     if (typeof printToOutput === 'function') {
       printToOutput('Signed out.', '#858585');
+    }
+    // If cloud panel is open, show guest state
+    const cloudView = document.getElementById('sidebar-cloud');
+    if (cloudView && cloudView.style.display !== 'none') {
+      const list = document.getElementById('cloud-project-list');
+      if (list && typeof _renderCloudGuest === 'function') _renderCloudGuest(list);
     }
   }
 });
