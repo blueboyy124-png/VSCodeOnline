@@ -1083,27 +1083,31 @@ function ctxCopyRelativePath() {
   printToOutput(`Copied relative path: ${rel}`, '#858585');
 }
 
+let _isRefreshingTree = false;
 async function refreshTree() {
-  const treeRoot = document.getElementById('tree-root');
-  if (!treeRoot || !projectFolder) return;
-  // Save which real-tree folders are open (by their fullPath label text)
-  const openFolders = new Set();
-  treeRoot.querySelectorAll('details[open]').forEach(d => {
-    const label = d.querySelector('summary span:last-child');
-    if (label) openFolders.add(label.textContent.trim());
-  });
-  treeRoot.innerHTML = '';
-  await renderFileTree(projectFolder, treeRoot);
-  // Re-open previously open folders by matching folder name
-  if (openFolders.size > 0) {
-    treeRoot.querySelectorAll('details').forEach(d => {
+  if (_isRefreshingTree) return;
+  _isRefreshingTree = true;
+  try {
+    const treeRoot = document.getElementById('tree-root');
+    if (!treeRoot || !projectFolder) return;
+    const openFolders = new Set();
+    treeRoot.querySelectorAll('details[open]').forEach(d => {
       const label = d.querySelector('summary span:last-child');
-      if (label && openFolders.has(label.textContent.trim())) {
-        d.setAttribute('open', '');
-        // Trigger the toggle to load children
-        d.dispatchEvent(new Event('toggle'));
-      }
+      if (label) openFolders.add(label.textContent.trim());
     });
+    treeRoot.innerHTML = '';
+    await renderFileTree(projectFolder, treeRoot);
+    if (openFolders.size > 0) {
+      treeRoot.querySelectorAll('details').forEach(d => {
+        const label = d.querySelector('summary span:last-child');
+        if (label && openFolders.has(label.textContent.trim())) {
+          d.setAttribute('open', '');
+          d.dispatchEvent(new Event('toggle'));
+        }
+      });
+    }
+  } finally {
+    _isRefreshingTree = false;
   }
 }
 
@@ -1563,6 +1567,34 @@ Promise.allSettled(_uniqueWorkerUrls.map(_prefetchWorkerBlob)).then(() => {
   
   editor1 = monaco.editor.create(document.getElementById("editor1"), { value: "// Editor 1\n// Open a folder to start", ...commonConfig });
   editor2 = monaco.editor.create(document.getElementById("editor2"), { value: "// Editor 2", ...commonConfig });
+
+  // ── Configure TypeScript/JS IntelliSense to work without workers ──
+  // Workers are CORS-blocked in this deployment, so we configure the
+  // language defaults to use main-thread mode with full type checking.
+  const tsDefaults = monaco.languages.typescript.javascriptDefaults;
+  tsDefaults.setEagerModelSync(true);
+  tsDefaults.setCompilerOptions({
+    target: monaco.languages.typescript.ScriptTarget.ES2020,
+    allowNonTsExtensions: true,
+    allowJs: true,
+    checkJs: false,
+    noEmit: true,
+    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+    module: monaco.languages.typescript.ModuleKind.CommonJS,
+    jsx: monaco.languages.typescript.JsxEmit.React,
+    allowSyntheticDefaultImports: true,
+    esModuleInterop: true,
+  });
+  tsDefaults.setDiagnosticsOptions({
+    noSemanticValidation: true,  // skip type errors (workers needed for these)
+    noSyntaxValidation:   false, // still show syntax errors
+    noSuggestionDiagnostics: false,
+  });
+  // Same for TypeScript
+  const tsxDefaults = monaco.languages.typescript.typescriptDefaults;
+  tsxDefaults.setEagerModelSync(true);
+  tsxDefaults.setCompilerOptions({ ...tsDefaults.getCompilerOptions(), checkJs: false });
+  tsxDefaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: false });
 
   // Sync minimap check mark with default enabled state
   const minimapCheck = document.getElementById('minimap-check');
@@ -4585,11 +4617,18 @@ async function restoreVirtualTreeState(root, openPaths) {
 }
 
 // Convenience: save state, wipe, re-render, restore state
+let _isRefreshingVirtualTree = false;
 async function refreshVirtualTree(rootPath, treeRoot) {
-  const openPaths = saveVirtualTreeState(treeRoot);
-  treeRoot.innerHTML = '';
-  await renderVirtualTree(rootPath, treeRoot);
-  await restoreVirtualTreeState(treeRoot, openPaths);
+  if (_isRefreshingVirtualTree) return; // prevent concurrent calls causing duplicates
+  _isRefreshingVirtualTree = true;
+  try {
+    const openPaths = saveVirtualTreeState(treeRoot);
+    treeRoot.innerHTML = '';
+    await renderVirtualTree(rootPath, treeRoot);
+    await restoreVirtualTreeState(treeRoot, openPaths);
+  } finally {
+    _isRefreshingVirtualTree = false;
+  }
 }
 
 async function renderVirtualTree(path = '/', parentElement) {
