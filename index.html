@@ -209,15 +209,19 @@
 
     <!-- Invite by email -->
     <div class="share-invite-row">
-      <div class="share-invite-input-wrap">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:.45"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-        <input type="email" id="share-email-input" class="share-email-input" placeholder="Invite by email…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')shareInvite()">
+      <div class="share-invite-row-top">
+        <div class="share-invite-input-wrap">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:.45"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <input type="email" id="share-email-input" class="share-email-input" placeholder="Invite by email…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')shareInvite()">
+        </div>
       </div>
-      <select id="share-role-select" class="share-role-select">
-        <option value="editor">Editor</option>
-        <option value="viewer">Viewer</option>
-      </select>
-      <button class="share-invite-btn" onclick="shareInvite()">Invite</button>
+      <div class="share-invite-bottom">
+        <select id="share-role-select" class="share-role-select">
+          <option value="editor">Can edit</option>
+          <option value="viewer">Can view</option>
+        </select>
+        <button class="share-invite-btn" onclick="shareInvite()">Send invite</button>
+      </div>
     </div>
     <div id="share-invite-msg" class="share-invite-msg"></div>
 

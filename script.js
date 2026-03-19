@@ -1533,23 +1533,31 @@ Promise.allSettled(_uniqueWorkerUrls.map(_prefetchWorkerBlob)).then(() => {
     theme: "vs-dark",
     automaticLayout: true,
     minimap: { enabled: true },
-    contextmenu: false,  // disable Monaco's built-in right-click menu
-    // ── Auto-complete & IntelliSense ─────────────────────────────────────────
-    quickSuggestions:           { other: true, comments: false, strings: true },
+    contextmenu: false,
+    // ── Auto-complete & IntelliSense ──────────────────────────────────
+    quickSuggestions:           { other: true, comments: true, strings: true },
     suggestOnTriggerCharacters: true,
-    wordBasedSuggestions:       'currentDocument',
+    wordBasedSuggestions:       'allDocuments',
     snippetSuggestions:         'inline',
     parameterHints:             { enabled: true },
     acceptSuggestionOnEnter:    'on',
     tabCompletion:              'on',
+    inlineSuggest:              { enabled: true },
     suggest: {
-      showWords:      true,
-      showSnippets:   true,
-      showKeywords:   true,
-      showFunctions:  true,
-      showClasses:    true,
-      showVariables:  true,
-      showProperties: true,
+      showWords:        true,
+      showSnippets:     true,
+      showKeywords:     true,
+      showFunctions:    true,
+      showClasses:      true,
+      showVariables:    true,
+      showProperties:   true,
+      showModules:      true,
+      showReferences:   true,
+      showConstructors: true,
+      showInterfaces:   true,
+      showEnums:        true,
+      filterGraceful:   true,
+      localityBonus:    true,
     },
   };
   
@@ -2399,11 +2407,21 @@ async function switchTab(fullPath){
   isProgrammaticEdit = true;
   activeEditor.setValue(openFiles[fullPath].content);
   isProgrammaticEdit = false;
-  
+
   const lang = getLanguageForFile(fullPath);
   monaco.editor.setModelLanguage(activeEditor.getModel(), lang);
   document.getElementById("status-lang").innerText = lang.charAt(0).toUpperCase() + lang.slice(1);
   renderTabs();
+
+  // Notify peers that we switched files — their cursor renderers will clear our old cursor
+  if (window._realtimeChannel) {
+    try {
+      window._realtimeChannel.send({
+        type: 'broadcast', event: 'cursor',
+        payload: { clientId: window._clientId, name: '', color: '', file: fullPath, line: 1, col: 1 }
+      });
+    } catch {}
+  }
 }
 
 async function closeTab(fullPath){

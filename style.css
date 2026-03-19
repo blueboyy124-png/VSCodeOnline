@@ -2337,7 +2337,9 @@ body, .titlebar, .sidebar, .sidebar-header, .fif-panel,
   position: fixed;
   top: 48px;
   right: 12px;
-  width: 340px;
+  width: min(340px, calc(100vw - 24px));
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
   background: #0f0f14;
   border: 1px solid var(--border-light);
   border-radius: 14px;
@@ -2354,12 +2356,17 @@ body, .titlebar, .sidebar, .sidebar-header, .fif-panel,
   margin-bottom: 14px;
 }
 
-/* Invite row */
+/* Invite row — stacked layout so nothing overflows */
 .share-invite-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.share-invite-row-top {
   display: flex;
   gap: 6px;
   align-items: center;
-  margin-bottom: 6px;
 }
 .share-invite-input-wrap {
   flex: 1;
@@ -2371,6 +2378,7 @@ body, .titlebar, .sidebar, .sidebar-header, .fif-panel,
   border-radius: 8px;
   padding: 0 10px;
   transition: border-color 150ms ease;
+  min-width: 0;
 }
 .share-invite-input-wrap:focus-within {
   border-color: var(--accent);
@@ -2389,17 +2397,22 @@ body, .titlebar, .sidebar, .sidebar-header, .fif-panel,
 }
 .share-email-input::placeholder { color: var(--text-muted); }
 
+.share-invite-bottom {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
 .share-role-select {
+  flex: 1;
   background: var(--bg-input);
   border: 1px solid var(--border-light);
   border-radius: 7px;
   color: var(--text-main);
   font-size: 11px;
   font-family: inherit;
-  padding: 5px 8px;
+  padding: 6px 8px;
   cursor: pointer;
   outline: none;
-  flex-shrink: 0;
 }
 .share-role-select:focus { border-color: var(--accent); }
 
@@ -2410,11 +2423,12 @@ body, .titlebar, .sidebar, .sidebar-header, .fif-panel,
   border-radius: 7px;
   font-size: 12px;
   font-weight: 600;
-  padding: 7px 12px;
+  padding: 7px 16px;
   cursor: pointer;
   font-family: inherit;
   flex-shrink: 0;
   transition: opacity 150ms ease;
+  white-space: nowrap;
 }
 .share-invite-btn:hover { opacity: .85; }
 .share-invite-btn:disabled { opacity: .45; cursor: not-allowed; }
@@ -2586,4 +2600,27 @@ body, .titlebar, .sidebar, .sidebar-header, .fif-panel,
 .app.collab-active {
   outline: 1.5px solid var(--accent);
   outline-offset: -1.5px;
+}
+
+/* Cloud section labels */
+.cloud-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 10px 4px;
+}
+.cloud-section-label:first-child { padding-top: 4px; }
+
+/* Role badge on shared projects */
+.cloud-project-role {
+  font-size: 10px;
+  background: var(--accent-select);
+  color: var(--accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-right: 4px;
 }

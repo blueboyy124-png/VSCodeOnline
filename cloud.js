@@ -59,75 +59,109 @@ async function cloudLoadProjects() {
   </div>`;
 
   try {
-    const { data: projects, error } = await _supabase
+    // Fetch own projects
+    const { data: myProjects, error: myErr } = await _supabase
       .from('projects')
       .select('id, name, updated_at')
       .eq('owner_id', currentUser.id)
       .order('updated_at', { ascending: false });
 
-    if (error) throw error;
+    if (myErr) throw myErr;
 
-    if (!projects || projects.length === 0) {
-      list.innerHTML = `
-        <div class="cloud-empty">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-            <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
-          </svg>
-          <div class="cloud-empty-title">No cloud projects yet</div>
-          <div class="cloud-empty-sub">Open a folder and use<br><strong>File → Save to Cloud</strong></div>
-        </div>`;
-      return;
-    }
+    // Fetch shared projects (collaborator entries accepted = true)
+    const { data: sharedCollabs } = await _supabase
+      .from('collaborators')
+      .select('project_id, role, projects(id, name, updated_at)')
+      .eq('user_id', currentUser.id)
+      .eq('accepted', true);
+
+    const sharedProjects = (sharedCollabs || [])
+      .map(c => ({ ...c.projects, role: c.role }))
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
 
     list.innerHTML = '';
-    projects.forEach(project => {
-      const item = document.createElement('div');
-      item.className = 'cloud-project-item';
-      item.dataset.id   = project.id;
-      item.dataset.name = project.name;
 
-      const date = new Date(project.updated_at);
-      const ago  = _timeAgo(date);
+    // ── My Projects section ──────────────────────────────────────
+    if (myProjects && myProjects.length > 0) {
+      list.appendChild(_cloudSectionLabel('MY PROJECTS'));
+      myProjects.forEach(p => list.appendChild(_cloudProjectItem(p, false)));
+    } else {
+      list.appendChild(_cloudSectionLabel('MY PROJECTS'));
+      const empty = document.createElement('div');
+      empty.className = 'cloud-empty';
+      empty.innerHTML = `
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+        <div class="cloud-empty-title">No projects yet</div>
+        <div class="cloud-empty-sub">Use <strong>File → Save to Cloud</strong></div>`;
+      list.appendChild(empty);
+    }
 
-      item.innerHTML = `
-        <div class="cloud-project-info">
-          <div class="cloud-project-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-          </div>
-          <div class="cloud-project-meta">
-            <div class="cloud-project-name">${_escHtml(project.name)}</div>
-            <div class="cloud-project-date">${ago}</div>
-          </div>
-        </div>
-        <div class="cloud-project-actions">
-          <div class="cloud-project-btn cloud-open-btn" title="Open project">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/></svg>
-          </div>
-          <div class="cloud-project-btn cloud-project-btn-danger cloud-delete-btn" title="Delete project">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-          </div>
-        </div>
-      `;
+    // ── Shared with me section ───────────────────────────────────
+    list.appendChild(_cloudSectionLabel('SHARED WITH ME'));
+    if (sharedProjects.length > 0) {
+      sharedProjects.forEach(p => list.appendChild(_cloudProjectItem(p, true)));
+    } else {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'font-size:11px;color:var(--text-muted);padding:6px 8px 10px';
+      empty.textContent = 'No projects shared with you yet';
+      list.appendChild(empty);
+    }
 
-      // Use event listeners instead of inline onclick — safe for any project name
-      item.querySelector('.cloud-project-info').addEventListener('click', () => cloudOpenProject(project.id, project.name));
-      item.querySelector('.cloud-open-btn').addEventListener('click',   (e) => { e.stopPropagation(); cloudOpenProject(project.id, project.name); });
-      item.querySelector('.cloud-delete-btn').addEventListener('click', (e) => { e.stopPropagation(); cloudDeleteProject(project.id, project.name); });
-
-      // Highlight currently open project
-      if (_collabProjectId === project.id) {
-        item.classList.add('cloud-project-active');
-      }
-
-      list.appendChild(item);
-    });
   } catch (err) {
     list.innerHTML = `<div class="cloud-error">Failed to load projects: ${_escHtml(err.message)}</div>`;
   }
 }
 window.cloudLoadProjects = cloudLoadProjects;
+
+function _cloudSectionLabel(text) {
+  const el = document.createElement('div');
+  el.className = 'cloud-section-label';
+  el.textContent = text;
+  return el;
+}
+
+function _cloudProjectItem(project, isShared) {
+  const item = document.createElement('div');
+  item.className = 'cloud-project-item';
+  item.dataset.id   = project.id;
+  item.dataset.name = project.name;
+
+  const ago = _timeAgo(new Date(project.updated_at));
+  const roleTag = isShared
+    ? `<span class="cloud-project-role">${project.role || 'editor'}</span>`
+    : '';
+
+  item.innerHTML = `
+    <div class="cloud-project-info">
+      <div class="cloud-project-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+      </div>
+      <div class="cloud-project-meta">
+        <div class="cloud-project-name">${_escHtml(project.name)}</div>
+        <div class="cloud-project-date">${ago}${isShared ? ' · shared' : ''}</div>
+      </div>
+      ${roleTag}
+    </div>
+    <div class="cloud-project-actions">
+      <div class="cloud-project-btn cloud-open-btn" title="Open project">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/></svg>
+      </div>
+      ${!isShared ? `<div class="cloud-project-btn cloud-project-btn-danger cloud-delete-btn" title="Delete project">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+      </div>` : ''}
+    </div>
+  `;
+
+  item.querySelector('.cloud-project-info').addEventListener('click', () => cloudOpenProject(project.id, project.name));
+  item.querySelector('.cloud-open-btn').addEventListener('click', (e) => { e.stopPropagation(); cloudOpenProject(project.id, project.name); });
+  if (!isShared) item.querySelector('.cloud-delete-btn')?.addEventListener('click', (e) => { e.stopPropagation(); cloudDeleteProject(project.id, project.name); });
+
+  if (_collabProjectId === project.id) item.classList.add('cloud-project-active');
+  return item;
+}
 
 /* ================================================================
    SAVE PROJECT TO CLOUD

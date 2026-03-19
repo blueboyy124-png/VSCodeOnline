@@ -13,6 +13,10 @@ let _isOwner           = false;
 let _clientId          = null;
 let _peers             = {};
 
+// Expose on window so script.js can broadcast file switches
+Object.defineProperty(window, '_realtimeChannel', { get: () => _realtimeChannel });
+Object.defineProperty(window, '_clientId',        { get: () => _clientId });
+
 const COLLAB_COLORS = [
   '#e06c75','#61afef','#98c379','#e5c07b',
   '#c678dd','#56b6c2','#d19a66','#be5046',
@@ -571,40 +575,93 @@ function _renderPresence() {
     return;
   }
 
-  // Show up to 4 peers, then a +N overflow
   const MAX_SHOWN = 4;
   const shown = peerList.slice(0, MAX_SHOWN);
   const overflow = peerList.length - MAX_SHOWN;
 
-  el.innerHTML = shown.map(p => {
-    const initials = _initialsFromName(p.name);
-    const inner = p.avatarUrl
-      ? `<img src="${p.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" alt="">`
-      : initials;
-    return `<div class="collab-avatar" style="background:${p.color}" title="${_escHtml(p.name)}">${inner}</div>`;
-  }).join('') + (overflow > 0
-    ? `<div class="collab-avatar" style="background:var(--bg-active);color:var(--text-muted);font-size:9px" title="${overflow} more">+${overflow}</div>`
-    : '');
+  el.innerHTML = '';
 
-  // Show the + button next to avatars
+  shown.forEach(p => {
+    const initials = _initialsFromName(p.name);
+    const div = document.createElement('div');
+    div.className = 'collab-avatar';
+    div.style.background = p.color;
+    div.title = p.name + (p.file ? ` — ${p.file.split('/').pop()}` : '');
+
+    if (p.avatarUrl) {
+      const img = document.createElement('img');
+      img.src = p.avatarUrl;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;';
+      img.alt = initials;
+      div.appendChild(img);
+    } else {
+      div.textContent = initials;
+    }
+
+    // Click to jump to peer's cursor (only if they're in the same file)
+    div.style.cursor = 'pointer';
+    div.addEventListener('click', () => _jumpToPeer(p.clientId));
+    el.appendChild(div);
+  });
+
+  if (overflow > 0) {
+    const extra = document.createElement('div');
+    extra.className = 'collab-avatar';
+    extra.style.cssText = 'background:var(--bg-active);color:var(--text-muted);font-size:9px;cursor:default;';
+    extra.textContent = `+${overflow}`;
+    el.appendChild(extra);
+  }
+
   if (addBtn) addBtn.style.display = 'flex';
+}
+
+/* Jump editor to a peer's cursor position */
+function _jumpToPeer(clientId) {
+  const cursor = _peerCursors[clientId];
+  if (!cursor || !editor1) return;
+
+  // If peer is on a different file, switch to it first
+  if (cursor.file && cursor.file !== currentFile1) {
+    if (openFiles[cursor.file]) {
+      // switchToFileTab is async but we can fire and forget, then scroll after
+      switchToFileTab(cursor.file).then(() => {
+        setTimeout(() => {
+          editor1.revealLineInCenter(cursor.line);
+          editor1.setPosition({ lineNumber: cursor.line, column: cursor.col });
+          editor1.focus();
+        }, 100);
+      });
+    }
+    return;
+  }
+
+  editor1.revealLineInCenter(cursor.line);
+  editor1.setPosition({ lineNumber: cursor.line, column: cursor.col });
+  editor1.focus();
 }
 
 /* ================================================================
    PEER CURSORS — render other users' cursor positions in Monaco
    ================================================================ */
 const _peerDecorations = {}; // { clientId: decorationId[] }
+const _peerCursors = {};     // { clientId: { line, col, file } }
 
 function _renderPeerCursor(payload) {
-  if (!editor1 || payload.file !== currentFile1) return;
-  const { clientId, name, color, line, col } = payload;
+  if (!editor1) return;
+  const { clientId, name, color, file, line, col } = payload;
 
-  // Remove old decoration for this peer
+  // Store latest known position for this peer
+  _peerCursors[clientId] = { line, col, file };
+
+  // Always clear old decoration first
   if (_peerDecorations[clientId]) {
     editor1.deltaDecorations(_peerDecorations[clientId], []);
+    _peerDecorations[clientId] = [];
   }
 
-  // Add new cursor decoration
+  // Only draw cursor if peer is viewing the same file
+  if (!file || file !== currentFile1) return;
+
   _peerDecorations[clientId] = editor1.deltaDecorations([], [
     {
       range: new monaco.Range(line, col, line, col + 1),
@@ -616,14 +673,15 @@ function _renderPeerCursor(payload) {
     }
   ]);
 
-  // Inject dynamic CSS for this peer's cursor color
   _injectPeerCursorCSS(clientId, name, color);
 }
 
 function _removePeerCursor(clientId) {
-  if (!editor1 || !_peerDecorations[clientId]) return;
-  editor1.deltaDecorations(_peerDecorations[clientId], []);
+  if (editor1 && _peerDecorations[clientId]) {
+    editor1.deltaDecorations(_peerDecorations[clientId], []);
+  }
   delete _peerDecorations[clientId];
+  delete _peerCursors[clientId];
 }
 
 function _injectPeerCursorCSS(clientId, name, color) {
