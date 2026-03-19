@@ -18,19 +18,15 @@
 <!-- TITLE BAR -->
 <div class="titlebar">
 
-  <!-- Left zone: app icon + menus + nav arrows -->
+  <!-- Left zone: app icon + menus -->
   <div class="titlebar-left">
-    <!-- VS Code app icon -->
-    <div class="titlebar-app-icon" title="VS Code Online">
-      <svg width="18" height="18" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <mask id="vsc-mask" mask-type="alpha"><path d="M70.9 4.4L37.2 36.6 15.6 19.4 4.4 25.8v48.4l11.2 6.4 21.6-17.2 33.7 32.2 20.7-9.9V14.3L70.9 4.4z"/></mask>
-        <g mask="url(#vsc-mask)">
-          <path d="M91.6 14.3L70.9 4.4 37.2 36.6 15.6 19.4 4.4 25.8 26 50 4.4 74.2l11.2 6.4 21.6-17.2 33.7 32.2 20.7-9.9V14.3z" fill="#fff"/>
-          <path d="M70.9 4.4L37.2 36.6V63.4L70.9 95.6l20.7-9.9V14.3L70.9 4.4z" fill="rgba(0,0,0,.25)"/>
-          <path d="M15.6 80.6l21.6-17.2V36.6L15.6 19.4 4.4 25.8v48.4l11.2 6.4z" fill="rgba(0,0,0,.25)"/>
-        </g>
+    <!-- Home button (always visible) -->
+    <a class="titlebar-home-btn" href="home.html" title="Home">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <polyline points="16 18 22 12 16 6"/>
+        <polyline points="8 6 2 12 8 18"/>
       </svg>
-    </div>
+    </a>
 
     <!-- Menu bar -->
     <div class="menubar">
@@ -154,20 +150,10 @@
           <div class="dropdown-item" onclick="helpMenuAbout()">About</div>
         </div>
       </div>
-    </div>
-
-    <!-- Back / Forward navigation arrows -->
-    <div class="titlebar-nav">
-      <button class="titlebar-nav-btn" title="Go Back (Alt+Left)" onclick="goMenuBack()">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M9.78 3.47a.75.75 0 0 1 0 1.06L6.31 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L4.69 8.53a.75.75 0 0 1 0-1.06L8.72 3.47a.75.75 0 0 1 1.06 0z"/></svg>
-      </button>
-      <button class="titlebar-nav-btn" title="Go Forward (Alt+Right)" onclick="goMenuForward()">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.47a.75.75 0 0 0 0 1.06L9.69 8 6.22 11.47a.75.75 0 1 0 1.06 1.06l4.03-4.03a.75.75 0 0 0 0-1.06L7.28 3.47a.75.75 0 0 0-1.06 0z"/></svg>
-      </button>
-    </div>
+    </div><!-- end menubar -->
   </div>
 
-  <!-- Center: search / command palette trigger -->
+  <!-- Center: nav arrows + search bar -->
   <div class="titlebar-center">
     <div id="command-palette" class="palette-overlay" style="display:none;">
       <div class="palette-container">
@@ -177,11 +163,19 @@
         <ul id="palette-results"></ul>
       </div>
     </div>
-    <div id="search-bar-placeholder" class="search-bar" onclick="openPalette('')">
-      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="opacity:.45;flex-shrink:0"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zM5.5 11a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/></svg>
-      <span id="search-bar-text">workspace</span>
-      <div class="search-bar-right">
-        <kbd>Ctrl</kbd><kbd>P</kbd>
+    <div class="titlebar-center-inner">
+      <button class="titlebar-nav-btn" title="Go Back (Alt+Left)" onclick="goMenuBack()">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M9.78 3.47a.75.75 0 0 1 0 1.06L6.31 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L4.69 8.53a.75.75 0 0 1 0-1.06L8.72 3.47a.75.75 0 0 1 1.06 0z"/></svg>
+      </button>
+      <button class="titlebar-nav-btn" title="Go Forward (Alt+Right)" onclick="goMenuForward()">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.47a.75.75 0 0 0 0 1.06L9.69 8 6.22 11.47a.75.75 0 1 0 1.06 1.06l4.03-4.03a.75.75 0 0 0 0-1.06L7.28 3.47a.75.75 0 0 0-1.06 0z"/></svg>
+      </button>
+      <div id="search-bar-placeholder" class="search-bar" onclick="openPalette('')">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="opacity:.45;flex-shrink:0"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zM5.5 11a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/></svg>
+        <span id="search-bar-text">workspace</span>
+        <div class="search-bar-right">
+          <kbd>Ctrl</kbd><kbd>P</kbd>
+        </div>
       </div>
     </div>
   </div>
@@ -709,7 +703,7 @@
 <script src="https://cdn.jsdelivr.net/npm/prettier@3.2.5/plugins/babel.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/prettier@3.2.5/plugins/html.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/prettier@3.2.5/plugins/postcss.js"></script>
-<script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="script.js"></script>
 <script src="auth.js"></script>

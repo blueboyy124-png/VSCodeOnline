@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VS Code Online</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0d0d0f">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: #0d0d0f;
+    color: #c8c8d4;
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ── Noise texture overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Ambient glow ── */
+  .glow-1 {
+    position: fixed;
+    top: -200px; left: 50%;
+    transform: translateX(-50%);
+    width: 800px; height: 600px;
+    background: radial-gradient(ellipse, rgba(124,106,247,.14) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .glow-2 {
+    position: fixed;
+    bottom: -200px; right: -100px;
+    width: 500px; height: 500px;
+    background: radial-gradient(ellipse, rgba(97,175,239,.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Nav ── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    background: rgba(13,13,15,.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    z-index: 100;
+  }
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #f0f0f8;
+    text-decoration: none;
+  }
+  .nav-logo svg { color: #7c6af7; }
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .nav-btn-ghost {
+    padding: 7px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,.1);
+    background: transparent;
+    color: #c8c8d4;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+    font-family: inherit;
+    display: inline-flex; align-items: center;
+  }
+  .nav-btn-ghost:hover { background: rgba(255,255,255,.06); color: #f0f0f8; border-color: rgba(255,255,255,.18); }
+  .nav-btn-primary {
+    padding: 7px 16px;
+    border-radius: 8px;
+    border: none;
+    background: #7c6af7;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: opacity 150ms ease, box-shadow 150ms ease;
+    font-family: inherit;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .nav-btn-primary:hover { opacity: .88; box-shadow: 0 4px 16px rgba(124,106,247,.4); }
+
+  /* ── Hero ── */
+  main {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 140px 24px 80px;
+    min-height: 100vh;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 100px;
+    background: rgba(124,106,247,.12);
+    border: 1px solid rgba(124,106,247,.25);
+    color: #a898f8;
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 28px;
+    letter-spacing: .02em;
+  }
+  .badge-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #7c6af7;
+    animation: pulse 2s ease infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .6; transform: scale(.85); }
+  }
+
+  h1 {
+    font-size: clamp(36px, 6vw, 72px);
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: -.03em;
+    color: #f0f0f8;
+    max-width: 800px;
+    margin-bottom: 20px;
+  }
+  h1 .accent {
+    background: linear-gradient(135deg, #7c6af7 0%, #61afef 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: clamp(15px, 2vw, 18px);
+    color: #6b6b7e;
+    max-width: 520px;
+    line-height: 1.7;
+    margin-bottom: 40px;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 64px;
+  }
+  .btn-hero-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 28px;
+    border-radius: 10px;
+    background: #7c6af7;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: opacity 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+  }
+  .btn-hero-primary:hover { opacity: .9; box-shadow: 0 8px 32px rgba(124,106,247,.45); transform: translateY(-1px); }
+  .btn-hero-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 28px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.06);
+    color: #c8c8d4;
+    font-size: 15px;
+    font-weight: 500;
+    text-decoration: none;
+    border: 1px solid rgba(255,255,255,.1);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .btn-hero-secondary:hover { background: rgba(255,255,255,.1); color: #f0f0f8; border-color: rgba(255,255,255,.2); }
+
+  /* ── Editor preview card ── */
+  .editor-preview {
+    width: 100%;
+    max-width: 900px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow: 0 32px 80px rgba(0,0,0,.6), 0 0 0 0.5px rgba(255,255,255,.04) inset;
+    background: #111113;
+    margin-bottom: 80px;
+  }
+  .preview-titlebar {
+    height: 36px;
+    background: #0d0d0f;
+    border-bottom: 1px solid #1e1e28;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 6px;
+  }
+  .preview-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .preview-dot-1 { background: #ff5f57; }
+  .preview-dot-2 { background: #ffbd2e; }
+  .preview-dot-3 { background: #28ca41; }
+  .preview-body {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    height: 320px;
+  }
+  .preview-sidebar {
+    background: #0d0d0f;
+    border-right: 1px solid #1e1e28;
+    padding: 10px 0;
+    overflow: hidden;
+  }
+  .preview-sidebar-header {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: #6b6b7e;
+    padding: 4px 14px 8px;
+    text-transform: uppercase;
+  }
+  .preview-file {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 14px;
+    font-size: 12px;
+    color: #c8c8d4;
+    cursor: default;
+  }
+  .preview-file.active { background: rgba(124,106,247,.12); color: #f0f0f8; }
+  .preview-file-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .preview-code {
+    padding: 14px 20px;
+    font-family: 'Cascadia Code', Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    overflow: hidden;
+    color: #c8c8d4;
+  }
+  .t-kw { color: #bd93f9; }
+  .t-fn { color: #7ec8e3; }
+  .t-str { color: #98c379; }
+  .t-cm { color: #5a5a7a; font-style: italic; }
+  .t-num { color: #e5a96a; }
+  .t-cls { color: #e5a96a; }
+  .ln { color: #3a3a52; margin-right: 20px; display: inline-block; width: 20px; text-align: right; user-select: none; }
+
+  /* ── Features ── */
+  .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    max-width: 900px;
+    width: 100%;
+    margin-bottom: 80px;
+  }
+  .feature-card {
+    background: rgba(255,255,255,.03);
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 14px;
+    padding: 24px;
+    text-align: left;
+    transition: background 200ms ease, border-color 200ms ease;
+  }
+  .feature-card:hover { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
+  .feature-icon {
+    width: 38px; height: 38px;
+    border-radius: 9px;
+    background: rgba(124,106,247,.15);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 14px;
+    color: #7c6af7;
+  }
+  .feature-title { font-size: 14px; font-weight: 600; color: #f0f0f8; margin-bottom: 6px; }
+  .feature-desc { font-size: 13px; color: #6b6b7e; line-height: 1.6; }
+
+  /* ── Footer ── */
+  footer {
+    position: relative; z-index: 1;
+    text-align: center;
+    padding: 24px;
+    font-size: 12px;
+    color: #3e3e52;
+    border-top: 1px solid #1e1e28;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 640px) {
+    nav { padding: 0 16px; }
+    .nav-links .nav-btn-ghost { display: none; }
+    main { padding: 120px 16px 60px; }
+    .preview-body { grid-template-columns: 1fr; }
+    .preview-sidebar { display: none; }
+    .hero-actions { flex-direction: column; align-items: center; }
+    .btn-hero-primary, .btn-hero-secondary { width: 100%; max-width: 320px; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="glow-1"></div>
+<div class="glow-2"></div>
+
+<!-- Nav -->
+<nav>
+  <a class="nav-logo" href="home.html">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <polyline points="16 18 22 12 16 6"/>
+      <polyline points="8 6 2 12 8 18"/>
+    </svg>
+    VS Code Online
+  </a>
+  <div class="nav-links">
+    <a class="nav-btn-ghost" href="index.html">Open Editor</a>
+    <a class="nav-btn-primary" href="index.html">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      Get Started
+    </a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<main>
+  <div class="badge">
+    <div class="badge-dot"></div>
+    Now with real-time collaboration
+  </div>
+
+  <h1>Code from<br><span class="accent">anywhere,</span><br>together.</h1>
+
+  <p class="subtitle">
+    A full VS Code experience in your browser. Open any project, write code with Monaco editor, run a terminal, and collaborate live with your team.
+  </p>
+
+  <div class="hero-actions">
+    <a class="btn-hero-primary" href="index.html">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 3 3-3 3"/><line x1="13" y1="15" x2="15" y2="15"/></svg>
+      Open Editor
+    </a>
+    <a class="btn-hero-secondary" href="index.html">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Start Collaborating
+    </a>
+  </div>
+
+  <!-- Editor preview -->
+  <div class="editor-preview">
+    <div class="preview-titlebar">
+      <div class="preview-dot preview-dot-1"></div>
+      <div class="preview-dot preview-dot-2"></div>
+      <div class="preview-dot preview-dot-3"></div>
+    </div>
+    <div class="preview-body">
+      <div class="preview-sidebar">
+        <div class="preview-sidebar-header">Explorer</div>
+        <div class="preview-file active">
+          <div class="preview-file-dot" style="background:#e8c84a"></div>
+          app.js
+        </div>
+        <div class="preview-file">
+          <div class="preview-file-dot" style="background:#264de4"></div>
+          style.css
+        </div>
+        <div class="preview-file">
+          <div class="preview-file-dot" style="background:#e44d26"></div>
+          index.html
+        </div>
+        <div class="preview-file">
+          <div class="preview-file-dot" style="background:#cbcb41"></div>
+          package.json
+        </div>
+      </div>
+      <div class="preview-code">
+        <div><span class="ln">1</span><span class="t-cm">// VS Code Online — real-time collab</span></div>
+        <div><span class="ln">2</span></div>
+        <div><span class="ln">3</span><span class="t-kw">import</span> <span class="t-fn">express</span> <span class="t-kw">from</span> <span class="t-str">'express'</span>;</div>
+        <div><span class="ln">4</span><span class="t-kw">import</span> { <span class="t-fn">createServer</span> } <span class="t-kw">from</span> <span class="t-str">'http'</span>;</div>
+        <div><span class="ln">5</span></div>
+        <div><span class="ln">6</span><span class="t-kw">const</span> <span class="t-fn">app</span> = <span class="t-fn">express</span>();</div>
+        <div><span class="ln">7</span><span class="t-kw">const</span> <span class="t-fn">PORT</span> = process.<span class="t-fn">env</span>.PORT || <span class="t-num">3000</span>;</div>
+        <div><span class="ln">8</span></div>
+        <div><span class="ln">9</span><span class="t-fn">app</span>.<span class="t-fn">get</span>(<span class="t-str">'/'</span>, (<span class="t-fn">req</span>, <span class="t-fn">res</span>) => {</div>
+        <div><span class="ln">10</span>  <span class="t-fn">res</span>.<span class="t-fn">send</span>(<span class="t-str">'Hello from VS Code Online!'</span>);</div>
+        <div><span class="ln">11</span>});</div>
+        <div><span class="ln">12</span></div>
+        <div><span class="ln">13</span><span class="t-fn">app</span>.<span class="t-fn">listen</span>(<span class="t-fn">PORT</span>, () => {</div>
+        <div><span class="ln">14</span>  console.<span class="t-fn">log</span>(<span class="t-str">`Server running on port <span class="t-num">${PORT}</span>`</span>);</div>
+        <div><span class="ln">15</span>});</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature cards -->
+  <div class="features">
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      </div>
+      <div class="feature-title">Monaco Editor</div>
+      <div class="feature-desc">The same editor that powers VS Code, running entirely in your browser with full syntax highlighting.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      <div class="feature-title">Real-time Collaboration</div>
+      <div class="feature-desc">Share a link and code together instantly. See live cursors and changes from your teammates in real time.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+      </div>
+      <div class="feature-title">Cloud Projects</div>
+      <div class="feature-desc">Save your projects to the cloud and access them from any device. Your work, always in sync.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      </div>
+      <div class="feature-title">Integrated Terminal</div>
+      <div class="feature-desc">Run npm, build your project, and execute code — all without leaving the browser.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </div>
+      <div class="feature-title">Fully Customizable</div>
+      <div class="feature-desc">Choose from multiple themes, font sizes, key bindings, and more. Make it yours.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      </div>
+      <div class="feature-title">Works Offline</div>
+      <div class="feature-desc">Install as a PWA and keep coding even without an internet connection. Your files stay local.</div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  © 2025 VS Code Online · Built with Monaco Editor &amp; Supabase
+</footer>
+
+</body>
+</html>

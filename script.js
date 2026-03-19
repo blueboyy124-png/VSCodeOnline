@@ -132,6 +132,101 @@ document.addEventListener('click', () => {
   closeContextMenu();
 });
 
+// Global right-click handler for areas without specific handlers
+document.addEventListener('contextmenu', (e) => {
+  // Skip if already handled by a more specific handler
+  if (e.defaultPrevented) return;
+
+  const target = e.target;
+  const statusBar = target.closest('.status-bar');
+  const breadcrumb = target.closest('.breadcrumb');
+  const terminalTabs = target.closest('#terminal-tabs');
+  const tabsBar = target.closest('#tabs');
+  const appMain = target.closest('.app-main');
+
+  if (statusBar) {
+    e.preventDefault();
+    _showStatusBarContextMenu(e);
+  } else if (breadcrumb) {
+    e.preventDefault();
+    _showBreadcrumbContextMenu(e);
+  } else if (terminalTabs) {
+    e.preventDefault();
+    _showTerminalTabsContextMenu(e);
+  } else if (tabsBar && !target.closest('.tab')) {
+    // Right-click on empty tab bar area
+    e.preventDefault();
+    const menu = document.getElementById('context-menu');
+    menu.innerHTML = '';
+    const item = (label, action) => { const el = document.createElement('div'); el.className = 'ctx-item'; el.innerHTML = `<span class="ctx-label">${label}</span>`; el.onclick = () => { closeContextMenu(); action(); }; return el; };
+    menu.appendChild(item('New File', () => createFile()));
+    menu.appendChild(item('Open Folder…', () => openFolder()));
+    menu.classList.add('active');
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let x = e.clientX, y = e.clientY;
+    if (x + menu.offsetWidth > vw - 8) x = vw - menu.offsetWidth - 8;
+    if (y + menu.offsetHeight > vh - 8) y = vh - menu.offsetHeight - 8;
+    menu.style.left = x + 'px'; menu.style.top = y + 'px';
+  }
+  // All other areas: allow browser default (text selection, etc)
+});
+
+function _showStatusBarContextMenu(e) {
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML = '';
+  const item = (label, action) => { const el = document.createElement('div'); el.className = 'ctx-item'; el.innerHTML = `<span class="ctx-label">${label}</span>`; if (action) el.onclick = () => { closeContextMenu(); action(); }; return el; };
+  const divider = () => { const el = document.createElement('div'); el.className = 'ctx-divider'; return el; };
+  menu.appendChild(item('New Terminal', () => terminalMenuNewTerminal()));
+  menu.appendChild(item('Toggle Terminal', () => {
+    const tc = document.getElementById('terminal-container');
+    if (tc) tc.style.display = tc.style.display === 'none' ? '' : 'none';
+  }));
+  menu.appendChild(divider());
+  menu.appendChild(item('Open Settings', () => openSettings()));
+  menu.classList.add('active');
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let x = e.clientX, y = e.clientY;
+  if (x + menu.offsetWidth > vw - 8) x = vw - menu.offsetWidth - 8;
+  if (y + menu.offsetHeight > vh - 8) y = vh - menu.offsetHeight - 8;
+  menu.style.left = x + 'px'; menu.style.top = y + 'px';
+}
+
+function _showBreadcrumbContextMenu(e) {
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML = '';
+  const item = (label, action) => { const el = document.createElement('div'); el.className = 'ctx-item'; el.innerHTML = `<span class="ctx-label">${label}</span>`; if (action) el.onclick = () => { closeContextMenu(); action(); }; return el; };
+  const divider = () => { const el = document.createElement('div'); el.className = 'ctx-divider'; return el; };
+  const file = currentFile1 || currentFile2;
+  menu.appendChild(item('Copy Path', () => file && navigator.clipboard.writeText(file).catch(() => {})));
+  menu.appendChild(item('Copy File Name', () => file && navigator.clipboard.writeText(file.split('/').pop()).catch(() => {})));
+  menu.appendChild(divider());
+  menu.appendChild(item('Reveal in Explorer', () => { if (typeof switchActivityView === 'function') switchActivityView('explorer'); }));
+  menu.classList.add('active');
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let x = e.clientX, y = e.clientY;
+  if (x + menu.offsetWidth > vw - 8) x = vw - menu.offsetWidth - 8;
+  if (y + menu.offsetHeight > vh - 8) y = vh - menu.offsetHeight - 8;
+  menu.style.left = x + 'px'; menu.style.top = y + 'px';
+}
+
+function _showTerminalTabsContextMenu(e) {
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML = '';
+  const item = (label, shortcut, action) => { const el = document.createElement('div'); el.className = 'ctx-item'; el.innerHTML = `<span class="ctx-label">${label}</span>${shortcut ? `<span class="ctx-shortcut">${shortcut}</span>` : ''}`; if (action) el.onclick = () => { closeContextMenu(); action(); }; return el; };
+  const divider = () => { const el = document.createElement('div'); el.className = 'ctx-divider'; return el; };
+  menu.appendChild(item('New Terminal', 'Ctrl+`', () => terminalMenuNewTerminal()));
+  menu.appendChild(item('Split Terminal', 'Ctrl+Shift+5', () => terminalMenuSplitTerminal()));
+  menu.appendChild(divider());
+  menu.appendChild(item('Clear Terminal', '', () => terminalMenuClear()));
+  menu.appendChild(item('Kill Terminal', '', () => terminalMenuKill()));
+  menu.classList.add('active');
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let x = e.clientX, y = e.clientY;
+  if (x + menu.offsetWidth > vw - 8) x = vw - menu.offsetWidth - 8;
+  if (y + menu.offsetHeight > vh - 8) y = vh - menu.offsetHeight - 8;
+  menu.style.left = x + 'px'; menu.style.top = y + 'px';
+}
+
 /* ── Edit Menu ────────────────────────────────────────────────── */
 function editMenuUndo()    { activeEditor?.trigger('menu', 'undo', null); }
 function editMenuRedo()    { activeEditor?.trigger('menu', 'redo', null); }
@@ -1475,7 +1570,7 @@ function getFolderIcon(name, isOpen = false) {
 //   4. Monaco does new Worker(blobUrl) — the worker starts with code already
 //      inside it.  No network request, no importScripts, no CORS issue.
 
-const _MONACO_CDN = 'https://unpkg.com/monaco-editor@0.45.0/min/vs';
+const _MONACO_CDN = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs';
 
 // Map every label Monaco might pass to getWorkerUrl → CDN URL
 const _workerSrcMap = {
@@ -1832,14 +1927,34 @@ async function createFile() {
 
 const term = new Terminal({
   theme: {
-    background: '#181818', 
-    foreground: '#cccccc', 
-    cursor: '#007acc',     
-    selectionBackground: 'rgba(255, 255, 255, 0.3)'
+    background:          '#0d0d0f',
+    foreground:          '#c8c8d4',
+    cursor:              '#7c6af7',
+    cursorAccent:        '#0d0d0f',
+    selectionBackground: 'rgba(124,106,247,0.25)',
+    black:               '#1e1e28',
+    red:                 '#f14c4c',
+    green:               '#4ec994',
+    yellow:              '#e5c07b',
+    blue:                '#61afef',
+    magenta:             '#c678dd',
+    cyan:                '#56b6c2',
+    white:               '#c8c8d4',
+    brightBlack:         '#3a3a52',
+    brightRed:           '#f48771',
+    brightGreen:         '#89d185',
+    brightYellow:        '#f0e68c',
+    brightBlue:          '#79c0ff',
+    brightMagenta:       '#bd93f9',
+    brightCyan:          '#7ec8e3',
+    brightWhite:         '#f0f0f8',
   },
-  fontFamily: "'Courier New', monospace",
+  fontFamily: "'Cascadia Code', 'Cascadia Mono', Consolas, 'Courier New', monospace",
   fontSize: 13,
-  cursorBlink: true
+  cursorBlink: true,
+  cursorStyle: 'bar',
+  lineHeight: 1.4,
+  letterSpacing: 0,
 });
 
 // 2. Load the Fit Addon so it resizes properly
@@ -1901,6 +2016,46 @@ document.getElementById('terminal-output').addEventListener('paste', (e) => {
   } else {
     term.write(text);
   }
+});
+
+// ── Terminal right-click context menu ────────────────────────────────────
+document.getElementById('terminal-output').addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML = '';
+  const item = (label, shortcut, action, disabled = false) => {
+    const el = document.createElement('div');
+    el.className = 'ctx-item' + (disabled ? ' disabled' : '');
+    el.innerHTML = `<span class="ctx-label">${label}</span>${shortcut ? `<span class="ctx-shortcut">${shortcut}</span>` : ''}`;
+    if (action && !disabled) el.onclick = () => { closeContextMenu(); action(); };
+    return el;
+  };
+  const divider = () => { const el = document.createElement('div'); el.className = 'ctx-divider'; return el; };
+
+  const hasSel = !!(term.getSelection && term.getSelection());
+  menu.appendChild(item('Copy', 'Ctrl+C', () => {
+    const sel = term.getSelection();
+    if (sel) navigator.clipboard.writeText(sel).catch(() => {});
+  }, !hasSel));
+  menu.appendChild(item('Paste', 'Ctrl+V', () => {
+    navigator.clipboard.readText().then(t => { if (shellWriter) shellWriter.write(t); else term.write(t); }).catch(() => {});
+  }));
+  menu.appendChild(item('Select All', 'Ctrl+A', () => term.selectAll()));
+  menu.appendChild(divider());
+  menu.appendChild(item('Clear Terminal', '', () => terminalMenuClear()));
+  menu.appendChild(item('Kill Terminal', '', () => terminalMenuKill()));
+  menu.appendChild(divider());
+  menu.appendChild(item('New Terminal', 'Ctrl+`', () => terminalMenuNewTerminal()));
+
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let x = e.clientX, y = e.clientY;
+  menu.classList.add('active');
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  if (x + mw > vw - 8) x = vw - mw - 8;
+  if (y + mh > vh - 8) y = vh - mh - 8;
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
 });
 
 // Update the initial welcome message
@@ -2318,6 +2473,38 @@ function renderTabs() {
     tab.appendChild(closeBtn);
 
     tab.onclick = () => switchToFileTab(fullPath);
+    tab.oncontextmenu = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const menu = document.getElementById('context-menu');
+      menu.innerHTML = '';
+      const item = (label, shortcut, action, danger = false) => {
+        const el = document.createElement('div');
+        el.className = 'ctx-item' + (danger ? ' danger' : '');
+        el.innerHTML = `<span class="ctx-label">${label}</span>${shortcut ? `<span class="ctx-shortcut">${shortcut}</span>` : ''}`;
+        if (action) el.onclick = () => { closeContextMenu(); action(); };
+        return el;
+      };
+      const divider = () => { const el = document.createElement('div'); el.className = 'ctx-divider'; return el; };
+      menu.appendChild(item('Close', 'Ctrl+F4', () => closeTab(fullPath)));
+      menu.appendChild(item('Close Others', '', () => {
+        Object.keys(openFiles).filter(p => p !== fullPath).forEach(p => closeTab(p));
+      }));
+      menu.appendChild(item('Close All', '', () => Object.keys(openFiles).forEach(p => closeTab(p))));
+      menu.appendChild(divider());
+      menu.appendChild(item('Copy Path', '', () => navigator.clipboard.writeText(fullPath).catch(() => {})));
+      menu.appendChild(item('Copy File Name', '', () => navigator.clipboard.writeText(fullPath.split('/').pop()).catch(() => {})));
+      menu.appendChild(divider());
+      menu.appendChild(item('Reveal in Explorer', '', () => {
+        if (typeof switchActivityView === 'function') switchActivityView('explorer');
+      }));
+      const vw = window.innerWidth, vh = window.innerHeight;
+      let x = e.clientX, y = e.clientY;
+      menu.classList.add('active');
+      const mw = menu.offsetWidth, mh = menu.offsetHeight;
+      if (x + mw > vw - 8) x = vw - mw - 8;
+      if (y + mh > vh - 8) y = vh - mh - 8;
+      menu.style.left = x + 'px'; menu.style.top = y + 'px';
+    };
     tabs.appendChild(tab);
   }
 

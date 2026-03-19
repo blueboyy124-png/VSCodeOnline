@@ -159,6 +159,38 @@ function _cloudProjectItem(project, isShared) {
   item.querySelector('.cloud-open-btn').addEventListener('click', (e) => { e.stopPropagation(); cloudOpenProject(project.id, project.name); });
   if (!isShared) item.querySelector('.cloud-delete-btn')?.addEventListener('click', (e) => { e.stopPropagation(); cloudDeleteProject(project.id, project.name); });
 
+  // Right-click context menu
+  item.addEventListener('contextmenu', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const menu = document.getElementById('context-menu');
+    if (!menu) return;
+    menu.innerHTML = '';
+    const ci = (label, action, danger = false) => {
+      const el = document.createElement('div');
+      el.className = 'ctx-item' + (danger ? ' danger' : '');
+      el.innerHTML = `<span class="ctx-label">${label}</span>`;
+      el.onclick = () => { menu.classList.remove('active'); action(); };
+      return el;
+    };
+    const div = () => { const el = document.createElement('div'); el.className = 'ctx-divider'; return el; };
+    menu.appendChild(ci('Open', () => cloudOpenProject(project.id, project.name)));
+    menu.appendChild(div());
+    menu.appendChild(ci('Copy Share Link', () => {
+      const url = `${location.origin}${location.pathname}?project=${project.id}`;
+      navigator.clipboard.writeText(url).catch(() => {});
+    }));
+    if (!isShared) {
+      menu.appendChild(div());
+      menu.appendChild(ci('Delete', () => cloudDeleteProject(project.id, project.name), true));
+    }
+    menu.classList.add('active');
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let x = e.clientX, y = e.clientY;
+    if (x + menu.offsetWidth > vw - 8) x = vw - menu.offsetWidth - 8;
+    if (y + menu.offsetHeight > vh - 8) y = vh - menu.offsetHeight - 8;
+    menu.style.left = x + 'px'; menu.style.top = y + 'px';
+  });
+
   if (_collabProjectId === project.id) item.classList.add('cloud-project-active');
   return item;
 }

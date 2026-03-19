@@ -67,6 +67,24 @@ body {
   flex-direction: column;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Prevent text selection on all chrome UI by default */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Re-enable selection only where it makes sense */
+.editor-pane,
+#output-log,
+.about-modal,
+.settings-modal,
+.share-panel,
+.auth-modal,
+input, textarea, select,
+.auth-input,
+.share-email-input,
+.palette-input-wrapper input {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* Scrollbars */
@@ -141,7 +159,15 @@ body {
   justify-content: center;
   align-items: center;
   height: 100%;
-  padding: 4px 8px;
+  padding: 4px 0;
+  /* Shift slightly right to compensate for heavy left side */
+  transform: translateX(10%);
+}
+
+.titlebar-center-inner {
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .titlebar-right {
@@ -149,61 +175,19 @@ body {
   align-items: center;
   justify-content: flex-end;
   height: 100%;
-  /* No padding — empty by default, OS buttons sit here via WCO */
 }
-
-/* ── App icon ─────────────────────────────────────────────────── */
-.titlebar-app-icon {
-  width: 40px; height: 38px;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  color: var(--accent);
-  opacity: .9;
-  cursor: default;
-}
-
-/* ── Menubar ──────────────────────────────────────────────────── */
-.menubar {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  flex-shrink: 0;
-}
-
-.menu-item {
-  height: 38px;
-  padding: 0 8px;
-  display: flex;
-  align-items: center;
-  cursor: default;
-  position: relative;
-  color: var(--text-muted);
-  font-size: 12px;
-  white-space: nowrap;
-  border-radius: 5px;
-  transition: background var(--ease-fast), color var(--ease-fast);
-}
-.menu-item:hover  { background: rgba(255,255,255,.06); color: var(--text-main); }
-.menu-item.active { background: rgba(124,106,247,.12); color: var(--text-bright); }
-.mobile-btn { display: none; cursor: pointer; }
 
 /* ── Back / Forward navigation arrows ────────────────────────── */
-.titlebar-nav {
-  display: flex;
-  align-items: center;
-  padding: 0 2px;
-  gap: 0;
-  flex-shrink: 0;
-}
 .titlebar-nav-btn {
-  width: 28px; height: 26px;
+  width: 26px; height: 26px;
   display: flex; align-items: center; justify-content: center;
   background: none; border: none; cursor: pointer;
   color: var(--text-muted);
-  border-radius: 4px;
+  border-radius: 5px;
+  flex-shrink: 0;
   transition: background var(--ease-fast), color var(--ease-fast);
 }
-.titlebar-nav-btn:hover { background: rgba(255,255,255,.1); color: var(--text-bright); }
+.titlebar-nav-btn:hover { background: rgba(255,255,255,.07); color: var(--text-bright); }
 .titlebar-nav-btn:disabled { opacity: .3; cursor: default; }
 
 /* ── Search bar ───────────────────────────────────────────────── */
@@ -844,9 +828,13 @@ details[open] > div { border-left-color: rgba(255,255,255,.04); }
 /* ================================================================
    XTERM POLISH
    ================================================================ */
-.xterm { padding: 2px; }
+.xterm { padding: 4px 2px; }
 .xterm-viewport::-webkit-scrollbar { width: 6px; }
-.xterm-viewport::-webkit-scrollbar-thumb { background: #424242; border-radius: 3px; }
+.xterm-viewport::-webkit-scrollbar-track { background: transparent; }
+.xterm-viewport::-webkit-scrollbar-thumb { background: #2a2a38; border-radius: 3px; }
+.xterm-viewport::-webkit-scrollbar-thumb:hover { background: #3a3a52; }
+/* Make terminal font match theme font */
+.xterm .xterm-rows { font-feature-settings: "calt" 1, "liga" 1; }
 /* ================================================================
    UPDATE BANNER
    ================================================================ */
@@ -2623,4 +2611,56 @@ body, .titlebar, .sidebar, .sidebar-header, .fif-panel,
   font-weight: 600;
   flex-shrink: 0;
   margin-right: 4px;
+}
+
+/* ================================================================
+   SCALING & RESPONSIVE FIXES
+   ================================================================ */
+
+/* Clamp titlebar content so it never overflows */
+.titlebar-left { min-width: 0; overflow: hidden; }
+.menubar { min-width: 0; overflow: hidden; }
+
+/* Search bar shrinks gracefully */
+.search-bar {
+  width: clamp(180px, 30vw, 480px);
+}
+
+/* Sidebar never wider than 60% of viewport */
+.sidebar { max-width: min(250px, 60vw); }
+
+/* Prevent status bar items from being too cramped */
+.status-right .status-item { display: none; }
+.status-right .status-item:nth-child(-n+3) { display: flex; }
+@media (min-width: 700px) {
+  .status-right .status-item { display: flex; }
+}
+
+/* Activity bar shrinks on very small screens */
+@media (max-width: 480px) {
+  .activity-bar { width: 38px; }
+  .activity-icon { width: 30px; height: 40px; margin: 1px 4px; }
+}
+
+/* Tabs bar — prevent overflow scrollbar from showing outside bounds */
+#tabs { max-width: 100%; }
+
+/* Share panel stays inside viewport at all sizes */
+.share-panel {
+  max-height: min(calc(100vh - 60px), 600px);
+}
+
+/* Terminal panel min-height */
+#terminal-container { min-height: 120px; }
+
+/* Collab border indicator doesn't conflict with resize handles */
+.app.collab-active {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  outline: none;
+}
+
+/* Make all modal overlays safe on small screens */
+.settings-modal, .about-modal-box, .auth-modal {
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
 }
