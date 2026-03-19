@@ -1570,7 +1570,7 @@ function getFolderIcon(name, isOpen = false) {
 //   4. Monaco does new Worker(blobUrl) — the worker starts with code already
 //      inside it.  No network request, no importScripts, no CORS issue.
 
-const _MONACO_CDN = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs';
+const _MONACO_CDN = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs';
 
 // Map every label Monaco might pass to getWorkerUrl → CDN URL
 const _workerSrcMap = {

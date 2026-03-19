@@ -2656,8 +2656,8 @@ body, .titlebar, .sidebar, .sidebar-header, .fif-panel,
    ================================================================ */
 
 /* Clamp titlebar content so it never overflows */
-.titlebar-left { min-width: 0; overflow: hidden; }
-.menubar { min-width: 0; overflow: hidden; }
+.titlebar-left { min-width: 0; overflow: visible; }
+.menubar { min-width: 0; overflow: visible; }
 
 /* Search bar shrinks gracefully */
 .search-bar {
