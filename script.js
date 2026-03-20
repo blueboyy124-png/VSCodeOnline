@@ -1562,78 +1562,224 @@ function getFolderIcon(name, isOpen = false) {
 //     (only from Window/iframe clients), so the proxy never ran
 //   • Sync XHR inside a worker is deprecated and blocked in strict mode
 //
-// This approach works unconditionally:
-//   1. The main page fetches each worker script from unpkg.com BEFORE Monaco
-//      loads.  Main-page fetch has the page origin, so CORS succeeds.
-//   2. The text is wrapped in a Blob and a blob: URL is created.
-//   3. getWorkerUrl returns the blob URL (which already contains the code).
-//   4. Monaco does new Worker(blobUrl) — the worker starts with code already
-//      inside it.  No network request, no importScripts, no CORS issue.
+// ── Monaco setup ─────────────────────────────────────────────────────────────
+// Workers (ts.worker, editor.worker etc.) are blocked by COEP headers on this
+// deployment. Instead of trying to load them, we skip workers entirely and
+// register our own completion providers so suggestions work perfectly.
 
 const _MONACO_CDN = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs';
 
-// Map every label Monaco might pass to getWorkerUrl → CDN URL
-const _workerSrcMap = {
-  json:       _MONACO_CDN + '/language/json/json.worker.js',
-  css:        _MONACO_CDN + '/language/css/css.worker.js',
-  scss:       _MONACO_CDN + '/language/css/css.worker.js',
-  less:       _MONACO_CDN + '/language/css/css.worker.js',
-  html:       _MONACO_CDN + '/language/html/html.worker.js',
-  handlebars: _MONACO_CDN + '/language/html/html.worker.js',
-  razor:      _MONACO_CDN + '/language/html/html.worker.js',
-  typescript: _MONACO_CDN + '/language/typescript/ts.worker.js',
-  javascript: _MONACO_CDN + '/language/typescript/ts.worker.js',
-  _default:   _MONACO_CDN + '/editor/editor.worker.js',
-};
-
-// Cache: CDN url → blob: URL containing the actual worker code
-const _workerBlobCache = {};
-
-async function _prefetchWorkerBlob(url) {
-  if (_workerBlobCache[url]) return;
-  try {
-    const resp = await fetch(url, { mode: 'cors', cache: 'no-store', credentials: 'omit' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const text = await resp.text();
-    _workerBlobCache[url] = URL.createObjectURL(
-      new Blob([text], { type: 'application/javascript' })
-    );
-  } catch (e) {
-    // CORS blocked or 404 — create a minimal stub blob so Monaco doesn't
-    // try to construct a Worker with the raw CDN URL (which also fails).
-    // Monaco gracefully falls back to main-thread processing with the stub.
-    _workerBlobCache[url] = URL.createObjectURL(
-      new Blob(['self.onmessage=function(){}'], { type: 'application/javascript' })
-    );
-  }
-}
-
-// Set MonacoEnvironment BEFORE require() so it is ready when Monaco first
-// needs a worker.  getWorkerUrl is synchronous; it just looks up the cache.
+// Tell Monaco not to use any workers — use synchronous fallbacks instead.
+// This prevents the 404 errors and lets us control completions ourselves.
 window.MonacoEnvironment = {
-  getWorkerUrl: function (_moduleId, label) {
-    const src = _workerSrcMap[label] || _workerSrcMap._default;
-    // Return the pre-fetched blob URL (or raw CDN url as last-resort fallback)
-    return _workerBlobCache[src] || src;
+  getWorker: function(_moduleId, _label) {
+    // Return a no-op worker blob — Monaco will fall back to sync mode
+    return new Worker(URL.createObjectURL(
+      new Blob([''], { type: 'application/javascript' })
+    ));
   }
 };
 
-// De-duplicate: only fetch each unique URL once (ts/js share the same file)
-const _uniqueWorkerUrls = [...new Set(Object.values(_workerSrcMap))];
+require.config({ paths: { vs: _MONACO_CDN } });
+require(['vs/editor/editor.main'], function () {
 
-// Fetch all workers first, then load Monaco.
-// Promise.allSettled never rejects, so a single failing prefetch won't block
-// the editor from loading.
-Promise.allSettled(_uniqueWorkerUrls.map(_prefetchWorkerBlob)).then(() => {
-  require.config({ paths: { vs: _MONACO_CDN } });
-  require(['vs/editor/editor.main'], function () {
+  // ── Completion providers — work without any language workers ──────────────
+  // JS/TS keywords + snippets
+  const JS_KEYWORDS = [
+    'abstract','arguments','async','await','boolean','break','byte','case','catch',
+    'char','class','const','continue','debugger','default','delete','do','double',
+    'else','enum','eval','export','extends','false','final','finally','float','for',
+    'function','goto','if','implements','import','in','instanceof','int','interface',
+    'let','long','native','new','null','of','package','private','protected','public',
+    'return','short','static','super','switch','synchronized','this','throw','throws',
+    'transient','true','try','typeof','undefined','var','void','volatile','while',
+    'with','yield','from','as','type','declare','namespace','module','keyof','infer',
+    'readonly','override','satisfies','using','accessor',
+  ];
+
+  const JS_GLOBALS = [
+    'console','document','window','navigator','location','history','screen',
+    'localStorage','sessionStorage','indexedDB','fetch','XMLHttpRequest',
+    'setTimeout','setInterval','clearTimeout','clearInterval','requestAnimationFrame',
+    'cancelAnimationFrame','Promise','async','await','Math','Date','JSON','Array',
+    'Object','String','Number','Boolean','Symbol','BigInt','RegExp','Error',
+    'TypeError','RangeError','SyntaxError','Map','Set','WeakMap','WeakSet',
+    'Proxy','Reflect','Intl','URL','URLSearchParams','FormData','Blob','File',
+    'FileReader','WebSocket','EventSource','MutationObserver','ResizeObserver',
+    'IntersectionObserver','performance','crypto','atob','btoa','encodeURIComponent',
+    'decodeURIComponent','encodeURI','decodeURI','parseInt','parseFloat','isNaN',
+    'isFinite','NaN','Infinity','globalThis','queueMicrotask','structuredClone',
+    'AbortController','AbortSignal','Headers','Request','Response',
+  ];
+
+  const JS_SNIPPETS = [
+    { label: 'if', detail: 'if statement', insert: 'if (${1:condition}) {\n\t${2}\n}' },
+    { label: 'ife', detail: 'if/else statement', insert: 'if (${1:condition}) {\n\t${2}\n} else {\n\t${3}\n}' },
+    { label: 'for', detail: 'for loop', insert: 'for (let ${1:i} = 0; ${1:i} < ${2:array}.length; ${1:i}++) {\n\t${3}\n}' },
+    { label: 'forof', detail: 'for...of loop', insert: 'for (const ${1:item} of ${2:iterable}) {\n\t${3}\n}' },
+    { label: 'forin', detail: 'for...in loop', insert: 'for (const ${1:key} in ${2:object}) {\n\t${3}\n}' },
+    { label: 'while', detail: 'while loop', insert: 'while (${1:condition}) {\n\t${2}\n}' },
+    { label: 'fn', detail: 'function declaration', insert: 'function ${1:name}(${2:params}) {\n\t${3}\n}' },
+    { label: 'afn', detail: 'arrow function', insert: 'const ${1:name} = (${2:params}) => {\n\t${3}\n}' },
+    { label: 'afne', detail: 'arrow function expression', insert: '(${1:params}) => ${2:expression}' },
+    { label: 'iife', detail: 'immediately invoked function', insert: '(function() {\n\t${1}\n})()' },
+    { label: 'class', detail: 'class declaration', insert: 'class ${1:Name} {\n\tconstructor(${2:params}) {\n\t\t${3}\n\t}\n}' },
+    { label: 'extends', detail: 'class extends', insert: 'class ${1:Name} extends ${2:Base} {\n\tconstructor(${3:params}) {\n\t\tsuper(${4});\n\t\t${5}\n\t}\n}' },
+    { label: 'try', detail: 'try/catch', insert: 'try {\n\t${1}\n} catch (${2:error}) {\n\t${3}\n}' },
+    { label: 'trycf', detail: 'try/catch/finally', insert: 'try {\n\t${1}\n} catch (${2:error}) {\n\t${3}\n} finally {\n\t${4}\n}' },
+    { label: 'sw', detail: 'switch statement', insert: 'switch (${1:expr}) {\n\tcase ${2:value}:\n\t\t${3}\n\t\tbreak;\n\tdefault:\n\t\t${4}\n}' },
+    { label: 'imp', detail: 'import module', insert: "import ${1:module} from '${2:path}'" },
+    { label: 'imd', detail: 'import destructured', insert: "import { ${1} } from '${2:path}'" },
+    { label: 'exp', detail: 'export default', insert: 'export default ${1}' },
+    { label: 'exn', detail: 'export named', insert: 'export const ${1:name} = ${2}' },
+    { label: 'clg', detail: 'console.log', insert: 'console.log(${1})' },
+    { label: 'cle', detail: 'console.error', insert: 'console.error(${1})' },
+    { label: 'clw', detail: 'console.warn', insert: 'console.warn(${1})' },
+    { label: 'clt', detail: 'console.table', insert: 'console.table(${1})' },
+    { label: 'prom', detail: 'new Promise', insert: 'new Promise((resolve, reject) => {\n\t${1}\n})' },
+    { label: 'then', detail: '.then().catch()', insert: '.then(${1:result} => {\n\t${2}\n}).catch(${3:error} => {\n\t${4}\n})' },
+    { label: 'asnc', detail: 'async function', insert: 'async function ${1:name}(${2}) {\n\t${3}\n}' },
+    { label: 'awt', detail: 'await expression', insert: 'await ${1}' },
+    { label: 'us', detail: '"use strict"', insert: '"use strict"' },
+    { label: 'obj', detail: 'object literal', insert: 'const ${1:obj} = {\n\t${2}: ${3},\n}' },
+    { label: 'arr', detail: 'array literal', insert: 'const ${1:arr} = [${2}]' },
+    { label: 'des', detail: 'destructuring', insert: 'const { ${1} } = ${2}' },
+    { label: 'spread', detail: 'spread operator', insert: '...${1}' },
+    { label: 'tern', detail: 'ternary operator', insert: '${1:condition} ? ${2:true} : ${3:false}' },
+    { label: 'nlc', detail: 'null coalescing', insert: '${1} ?? ${2:default}' },
+    { label: 'opt', detail: 'optional chaining', insert: '${1}?.${2}' },
+    { label: 'get', detail: 'getter', insert: 'get ${1:prop}() {\n\treturn this.${2};\n}' },
+    { label: 'set', detail: 'setter', insert: 'set ${1:prop}(${2:value}) {\n\tthis.${3} = ${2:value};\n}' },
+    { label: 'map', detail: 'Array.map', insert: '${1:array}.map((${2:item}) => ${3})' },
+    { label: 'filter', detail: 'Array.filter', insert: '${1:array}.filter((${2:item}) => ${3})' },
+    { label: 'reduce', detail: 'Array.reduce', insert: '${1:array}.reduce((${2:acc}, ${3:item}) => {\n\t${4}\n\treturn ${2:acc};\n}, ${5:initial})' },
+    { label: 'find', detail: 'Array.find', insert: '${1:array}.find((${2:item}) => ${3})' },
+    { label: 'some', detail: 'Array.some', insert: '${1:array}.some((${2:item}) => ${3})' },
+    { label: 'every', detail: 'Array.every', insert: '${1:array}.every((${2:item}) => ${3})' },
+    { label: 'qsel', detail: 'querySelector', insert: 'document.querySelector("${1:selector}")' },
+    { label: 'qsela', detail: 'querySelectorAll', insert: 'document.querySelectorAll("${1:selector}")' },
+    { label: 'ael', detail: 'addEventListener', insert: '${1:element}.addEventListener("${2:event}", (${3:e}) => {\n\t${4}\n})' },
+    { label: 'rel', detail: 'removeEventListener', insert: '${1:element}.removeEventListener("${2:event}", ${3:handler})' },
+    { label: 'gel', detail: 'getElementById', insert: 'document.getElementById("${1:id}")' },
+    { label: 'st', detail: 'setTimeout', insert: 'setTimeout(() => {\n\t${1}\n}, ${2:delay})' },
+    { label: 'si', detail: 'setInterval', insert: 'setInterval(() => {\n\t${1}\n}, ${2:interval})' },
+    { label: 'json', detail: 'JSON.parse', insert: 'JSON.parse(${1})' },
+    { label: 'jsons', detail: 'JSON.stringify', insert: 'JSON.stringify(${1}, null, 2)' },
+    { label: 'fetch', detail: 'fetch request', insert: "const response = await fetch('${1:url}');\nconst data = await response.json();" },
+  ];
+
+  // HTML snippets
+  const HTML_SNIPPETS = [
+    { label: '!', detail: 'HTML5 boilerplate', insert: '<!DOCTYPE html>\n<html lang="en">\n<head>\n\t<meta charset="UTF-8">\n\t<meta name="viewport" content="width=device-width, initial-scale=1.0">\n\t<title>${1:Document}</title>\n</head>\n<body>\n\t${2}\n</body>\n</html>' },
+    { label: 'div', detail: '<div>', insert: '<div class="${1}">${2}</div>' },
+    { label: 'span', detail: '<span>', insert: '<span class="${1}">${2}</span>' },
+    { label: 'a', detail: '<a href>', insert: '<a href="${1:#}">${2}</a>' },
+    { label: 'img', detail: '<img>', insert: '<img src="${1}" alt="${2}">' },
+    { label: 'input', detail: '<input>', insert: '<input type="${1:text}" id="${2}" name="${3}" placeholder="${4}">' },
+    { label: 'btn', detail: '<button>', insert: '<button type="${1:button}" class="${2}">${3}</button>' },
+    { label: 'form', detail: '<form>', insert: '<form action="${1}" method="${2:POST}">\n\t${3}\n</form>' },
+    { label: 'ul', detail: '<ul><li>', insert: '<ul>\n\t<li>${1}</li>\n</ul>' },
+    { label: 'ol', detail: '<ol><li>', insert: '<ol>\n\t<li>${1}</li>\n</ol>' },
+    { label: 'table', detail: '<table>', insert: '<table>\n\t<thead>\n\t\t<tr>\n\t\t\t<th>${1}</th>\n\t\t</tr>\n\t</thead>\n\t<tbody>\n\t\t<tr>\n\t\t\t<td>${2}</td>\n\t\t</tr>\n\t</tbody>\n</table>' },
+    { label: 'link', detail: '<link rel="stylesheet">', insert: '<link rel="stylesheet" href="${1:styles.css}">' },
+    { label: 'script', detail: '<script src>', insert: '<script src="${1}"></script>' },
+    { label: 'meta', detail: '<meta name>', insert: '<meta name="${1}" content="${2}">' },
+  ];
+
+  // CSS snippets
+  const CSS_SNIPPETS = [
+    { label: 'flex', detail: 'flexbox', insert: 'display: flex;\nalign-items: ${1:center};\njustify-content: ${2:center};' },
+    { label: 'grid', detail: 'grid', insert: 'display: grid;\ngrid-template-columns: ${1:repeat(3, 1fr)};\ngap: ${2:16px};' },
+    { label: 'abs', detail: 'position absolute', insert: 'position: absolute;\ntop: ${1:0};\nleft: ${2:0};\nright: ${3:0};\nbottom: ${4:0};' },
+    { label: 'fix', detail: 'position fixed', insert: 'position: fixed;\ntop: ${1:0};\nleft: ${2:0};' },
+    { label: 'trs', detail: 'transition', insert: 'transition: ${1:all} ${2:200ms} ${3:ease};' },
+    { label: 'anim', detail: '@keyframes', insert: '@keyframes ${1:name} {\n\tfrom {\n\t\t${2}\n\t}\n\tto {\n\t\t${3}\n\t}\n}' },
+    { label: 'bg', detail: 'background', insert: 'background: ${1:#fff};' },
+    { label: 'br', detail: 'border-radius', insert: 'border-radius: ${1:8px};' },
+    { label: 'shadow', detail: 'box-shadow', insert: 'box-shadow: ${1:0 4px 16px rgba(0,0,0,.2)};' },
+    { label: 'mq', detail: '@media query', insert: '@media (max-width: ${1:768px}) {\n\t${2}\n}' },
+    { label: 'var', detail: 'CSS variable', insert: 'var(--${1:name})' },
+    { label: 'root', detail: ':root variables', insert: ':root {\n\t--${1:name}: ${2:value};\n}' },
+  ];
+
+  function mkKind(k) { return monaco.languages.CompletionItemKind[k]; }
+
+  function registerCompletions(langs, snippets, keywords, globals) {
+    langs.forEach(lang => {
+      monaco.languages.registerCompletionItemProvider(lang, {
+        triggerCharacters: ['.', '"', "'", '`', '/', '@', '<'],
+        provideCompletionItems(model, position) {
+          const word = model.getWordUntilPosition(position);
+          const range = {
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: word.startColumn,
+            endColumn: word.endColumn,
+          };
+
+          const suggestions = [];
+
+          // Keywords
+          if (keywords) {
+            keywords.forEach(kw => {
+              suggestions.push({
+                label: kw,
+                kind: mkKind('Keyword'),
+                insertText: kw,
+                range,
+                sortText: '0' + kw,
+              });
+            });
+          }
+
+          // Globals / builtins
+          if (globals) {
+            globals.forEach(g => {
+              suggestions.push({
+                label: g,
+                kind: mkKind('Variable'),
+                insertText: g,
+                range,
+                detail: 'Built-in',
+                sortText: '1' + g,
+              });
+            });
+          }
+
+          // Snippets
+          if (snippets) {
+            snippets.forEach(s => {
+              suggestions.push({
+                label: s.label,
+                kind: mkKind('Snippet'),
+                insertText: s.insert,
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                detail: s.detail,
+                range,
+                sortText: '2' + s.label,
+              });
+            });
+          }
+
+          return { suggestions };
+        }
+      });
+    });
+  }
+
+  // Register for all the common languages
+  registerCompletions(['javascript', 'typescript', 'javascriptreact', 'typescriptreact'],
+    JS_SNIPPETS, JS_KEYWORDS, JS_GLOBALS);
+  registerCompletions(['html'], HTML_SNIPPETS, null, null);
+  registerCompletions(['css', 'scss', 'less'], CSS_SNIPPETS, null, null);
+
+  // ── Editor instances ─────────────────────────────────────────────────────
   const commonConfig = {
     language: "javascript",
     theme: "vs-dark",
     automaticLayout: true,
     minimap: { enabled: true },
     contextmenu: false,
-    // ── Auto-complete & IntelliSense ──────────────────────────────────
     quickSuggestions:           { other: true, comments: true, strings: true },
     suggestOnTriggerCharacters: true,
     wordBasedSuggestions:       'allDocuments',
@@ -1657,39 +1803,12 @@ Promise.allSettled(_uniqueWorkerUrls.map(_prefetchWorkerBlob)).then(() => {
       showEnums:        true,
       filterGraceful:   true,
       localityBonus:    true,
+      insertMode:       'replace',
     },
   };
   
   editor1 = monaco.editor.create(document.getElementById("editor1"), { value: "// Editor 1\n// Open a folder to start", ...commonConfig });
   editor2 = monaco.editor.create(document.getElementById("editor2"), { value: "// Editor 2", ...commonConfig });
-
-  // ── Configure TypeScript/JS IntelliSense to work without workers ──
-  // Workers are CORS-blocked in this deployment, so we configure the
-  // language defaults to use main-thread mode with full type checking.
-  const tsDefaults = monaco.languages.typescript.javascriptDefaults;
-  tsDefaults.setEagerModelSync(true);
-  tsDefaults.setCompilerOptions({
-    target: monaco.languages.typescript.ScriptTarget.ES2020,
-    allowNonTsExtensions: true,
-    allowJs: true,
-    checkJs: false,
-    noEmit: true,
-    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-    module: monaco.languages.typescript.ModuleKind.CommonJS,
-    jsx: monaco.languages.typescript.JsxEmit.React,
-    allowSyntheticDefaultImports: true,
-    esModuleInterop: true,
-  });
-  tsDefaults.setDiagnosticsOptions({
-    noSemanticValidation: true,  // skip type errors (workers needed for these)
-    noSyntaxValidation:   false, // still show syntax errors
-    noSuggestionDiagnostics: false,
-  });
-  // Same for TypeScript
-  const tsxDefaults = monaco.languages.typescript.typescriptDefaults;
-  tsxDefaults.setEagerModelSync(true);
-  tsxDefaults.setCompilerOptions({ ...tsDefaults.getCompilerOptions(), checkJs: false });
-  tsxDefaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: false });
 
   // Sync minimap check mark with default enabled state
   const minimapCheck = document.getElementById('minimap-check');
@@ -1749,7 +1868,6 @@ Promise.allSettled(_uniqueWorkerUrls.map(_prefetchWorkerBlob)).then(() => {
   // Apply saved editor settings
   initSettings();
   }); // end require(['vs/editor/editor.main'])
-}); // end Promise.allSettled worker prefetch
 
 function triggerManualSave() {
   const currentFile = activeEditor === editor1 ? currentFile1 : currentFile2;
