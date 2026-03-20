@@ -397,26 +397,26 @@ input, textarea, select,
   transition: background 200ms ease, border-color 200ms ease;
 }
 .activity-icon {
-  width: 44px; height: 44px;
+  width: 36px; height: 36px;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-muted);
   cursor: pointer;
   position: relative;
-  border-radius: 8px;
-  margin: 1px 4px;
-  width: 36px;
-  transition: color var(--ease-mid), background var(--ease-fast);
+  border-radius: 9px;
+  margin: 2px 4px;
+  transition: color 120ms ease, background 120ms ease, transform 100ms ease;
 }
-.activity-icon:hover { color: var(--text-main); background: rgba(255,255,255,.05); }
-.activity-icon.active { color: var(--text-bright); background: rgba(124,106,247,.12); }
+.activity-icon:hover { color: var(--text-main); background: rgba(255,255,255,.06); transform: scale(1.05); }
+.activity-icon.active { color: var(--text-bright); background: rgba(124,106,247,.14); }
 .activity-icon.active::before {
   content: '';
   position: absolute;
   left: -4px; top: 8px; bottom: 8px;
-  width: 2px;
+  width: 2.5px;
   background: var(--accent);
   border-radius: 0 2px 2px 0;
 }
+.activity-icon:active { transform: scale(.95); }
 /* .activity-icon-bottom replaced by .activity-bar-bottom group */
 
 /* ================================================================
@@ -523,10 +523,10 @@ details > summary {
   padding: 2px 8px 2px 4px;
   display: flex; align-items: center; gap: 3px;
   cursor: pointer; font-size: 13px;
-  color: var(--text-main); border-radius: 5px;
+  color: var(--text-main); border-radius: 6px;
   list-style: none; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
-  transition: background var(--ease-fast), color var(--ease-fast);
+  transition: background 100ms ease, color 100ms ease;
 }
 details > summary::-webkit-details-marker { display: none; }
 details > summary::before {
@@ -534,22 +534,23 @@ details > summary::before {
   display: inline-block;
   width: 14px; text-align: center;
   color: var(--text-muted); font-size: 14px; flex-shrink: 0;
-  transition: transform 120ms ease, color var(--ease-fast);
+  transition: transform 120ms ease, color 100ms ease;
 }
 details[open] > summary::before { transform: rotate(90deg); color: var(--text-main); }
-details > summary:hover { background: rgba(255,255,255,.04); color: var(--text-bright); }
-details > div { padding-left: 12px; border-left: 1px solid transparent; }
-details[open] > div { border-left-color: rgba(255,255,255,.04); }
+details > summary:hover { background: rgba(255,255,255,.05); color: var(--text-bright); }
+details > div { padding-left: 12px; border-left: 1px solid rgba(255,255,255,.05); }
+details[open] > div { }
 
 .file-item {
   padding: 2px 8px 2px 4px;
   display: flex; align-items: center; gap: 4px;
   cursor: pointer; font-size: 13px;
-  color: var(--text-main); border-radius: 5px;
+  color: var(--text-main); border-radius: 6px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  transition: background var(--ease-fast), color var(--ease-fast);
+  transition: background 100ms ease, color 100ms ease;
 }
-.file-item:hover { background: rgba(255,255,255,.04); color: var(--text-bright); }
+.file-item:hover { background: rgba(255,255,255,.05); color: var(--text-bright); }
+.file-item.active-file { background: var(--accent-select); color: var(--text-bright); }
 
 .file-icon {
   font-size: 11px; font-weight: 700;
@@ -587,24 +588,24 @@ details[open] > div { border-left-color: rgba(255,255,255,.04); }
   cursor: pointer; position: relative;
   font-size: 12px;
   background: transparent; color: var(--text-muted);
-  border-radius: 7px 7px 0 0;
+  border-radius: 8px 8px 0 0;
   display: inline-flex; align-items: center;
   white-space: nowrap; flex-shrink: 0; gap: 6px;
-  transition: background var(--ease-fast), color var(--ease-fast);
+  transition: background 100ms ease, color 100ms ease;
 }
 .tab::after {
   content: '';
   position: absolute;
-  bottom: 0; left: 8px; right: 8px; height: 1.5px;
+  bottom: 0; left: 8px; right: 8px; height: 2px;
   background: transparent;
   border-radius: 2px 2px 0 0;
-  transition: background var(--ease-fast);
+  transition: background 100ms ease;
 }
-.tab:hover { background: rgba(255,255,255,.04); color: var(--text-main); }
+.tab:hover { background: rgba(255,255,255,.05); color: var(--text-main); }
 .tab.active {
   background: var(--bg-editor);
   color: var(--text-bright);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.07), inset 0 1px 0 0 rgba(255,255,255,.04);
 }
 .tab.active::after { background: var(--accent); }
 
@@ -2701,4 +2702,158 @@ body, .titlebar, .sidebar, .sidebar-header, .fif-panel,
 .settings-modal, .about-modal-box, .auth-modal {
   max-height: calc(100vh - 32px);
   overflow-y: auto;
+}
+
+/* ================================================================
+   GLOBAL POLISH — rounded, modern, coherent animations
+   ================================================================ */
+
+/* Global interaction feel */
+button, [onclick], .menu-item, .dropdown-item, .ctx-item,
+.tab, .file-item, details > summary, .activity-icon,
+.cloud-project-item, .proj-row, .qcard {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth focus rings */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Sidebar action buttons - rounder */
+.sidebar-action-btn {
+  border-radius: 6px;
+  transition: color 100ms ease, background 100ms ease, transform 100ms ease;
+}
+.sidebar-action-btn:hover { transform: scale(1.1); }
+.sidebar-action-btn:active { transform: scale(.92); }
+
+/* Titlebar nav buttons */
+.titlebar-nav-btn {
+  transition: background 100ms ease, color 100ms ease, transform 100ms ease;
+}
+.titlebar-nav-btn:hover { transform: scale(1.08); }
+.titlebar-nav-btn:active { transform: scale(.92); }
+
+/* Terminal tabs - rounder */
+.term-tab { border-radius: 7px 7px 0 0; }
+.term-action-btn {
+  border-radius: 6px;
+  transition: background 100ms ease, color 100ms ease, transform 100ms ease;
+}
+.term-action-btn:hover { transform: scale(1.08); }
+
+/* Context menu items - rounder, smoother */
+.ctx-item {
+  border-radius: 7px;
+  transition: background 80ms ease, color 80ms ease;
+}
+.dropdown-item {
+  border-radius: 7px;
+  transition: background 80ms ease, color 80ms ease;
+}
+
+/* Profile button */
+.profile-avatar-btn {
+  transition: transform 120ms ease;
+}
+.profile-avatar-btn:hover { transform: scale(1.08); }
+.profile-avatar-btn:active { transform: scale(.94); }
+
+/* Share button - pulse on hover */
+.share-btn {
+  transition: opacity 150ms ease, box-shadow 150ms ease, transform 100ms ease;
+}
+.share-btn:hover { transform: translateY(-1px); }
+.share-btn:active { transform: translateY(0) scale(.97); }
+
+/* Collab add button */
+.collab-add-btn {
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease, transform 100ms ease;
+}
+.collab-add-btn:hover { transform: scale(1.1); }
+.collab-add-btn:active { transform: scale(.93); }
+
+/* Status bar items */
+.status-item {
+  border-radius: 4px;
+  transition: background 100ms ease;
+}
+
+/* Open folder button */
+.open-folder-btn {
+  border-radius: 9px;
+  transition: opacity 150ms ease, box-shadow 150ms ease, transform 100ms ease;
+}
+.open-folder-btn:hover { transform: translateY(-1px); }
+.open-folder-btn:active { transform: translateY(0) scale(.97); }
+
+/* Settings toggle */
+.settings-toggle-track { border-radius: 12px; }
+.settings-toggle-track::after { border-radius: 50%; }
+
+/* Palette items */
+#palette-results li {
+  border-radius: 8px;
+  transition: background 80ms ease, color 80ms ease;
+}
+
+/* Collab avatar hover */
+.collab-avatar {
+  transition: transform 120ms ease, z-index 0ms;
+}
+.collab-avatar:hover { transform: scale(1.18) translateY(-2px); }
+
+/* Welcome screen buttons */
+.welcome-open-btn {
+  border-radius: 9px;
+  transition: opacity 150ms ease, box-shadow 150ms ease, transform 100ms ease;
+}
+.welcome-open-btn:hover { transform: translateY(-1px); }
+.welcome-open-btn:active { transform: scale(.97); }
+
+/* Breadcrumb items */
+.breadcrumb-item {
+  border-radius: 5px;
+  transition: background 100ms ease, color 100ms ease;
+}
+
+/* Editor pane split border - softer */
+.editor-pane + .editor-pane { border-left: 1px solid var(--border); }
+
+/* Sidebar resize handle - smoother */
+#sidebar-resize-handle,
+#terminal-resize-handle {
+  transition: background 150ms ease;
+}
+
+/* Cloud project items - rounder */
+.cloud-project-item {
+  border-radius: 8px;
+  transition: background 100ms ease;
+}
+
+/* Share panel items - rounder */
+.share-person { border-radius: 9px; }
+.share-person-remove { border-radius: 5px; }
+
+/* Input focus glow */
+input:focus, textarea:focus, select:focus {
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+/* Smooth scrolling everywhere */
+* { scroll-behavior: smooth; }
+
+/* Tab close button */
+.tab .close {
+  border-radius: 5px;
+  transition: opacity 100ms ease, background 100ms ease, color 100ms ease;
+}
+
+/* Collab border indicator - glow effect */
+.app.collab-active {
+  box-shadow: inset 0 0 0 1.5px var(--accent), inset 0 0 20px rgba(124,106,247,.06);
 }

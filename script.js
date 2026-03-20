@@ -3237,6 +3237,11 @@ window.toggleRootFolder = function() {
 /* RESTORE SESSION ON LOAD */
 window.addEventListener('DOMContentLoaded', async () => {
   // Handle navigation from home.html
+  const openFolderFlag = sessionStorage.getItem('openFolderOnLoad');
+  if (openFolderFlag) {
+    sessionStorage.removeItem('openFolderOnLoad');
+    setTimeout(() => { if (typeof openFolder === 'function') openFolder(); }, 400);
+  }
   const openCloud = sessionStorage.getItem('openCloudOnLoad');
   if (openCloud) {
     sessionStorage.removeItem('openCloudOnLoad');
@@ -3275,21 +3280,13 @@ function renderWelcomeScreen(storedHandle, recentFolders) {
   const tree = document.getElementById('fileTree');
   if (!tree) return;
 
-  const recentItems = recentFolders.map(name => `
-    <div class="welcome-recent-item ${storedHandle && storedHandle.name === name ? 'welcome-recent-active' : ''}"
-         onclick="${storedHandle && storedHandle.name === name ? 'window.restoreWorkspace()' : 'openFolder()'}">
-      <div class="welcome-recent-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+  const reconnectBtn = storedHandle
+    ? `<button class="welcome-open-btn" onclick="window.restoreWorkspace()" style="margin-bottom:6px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.55"/>
         </svg>
-      </div>
-      <div class="welcome-recent-info">
-        <div class="welcome-recent-name">${name}</div>
-        <div class="welcome-recent-tag">${storedHandle && storedHandle.name === name ? 'Last session' : 'Recent'}</div>
-      </div>
-      ${storedHandle && storedHandle.name === name ? '<div class="welcome-recent-badge">Reconnect</div>' : ''}
-    </div>
-  `).join('');
+        Reopen "${storedHandle.name}"
+      </button>` : '';
 
   tree.innerHTML = `
     <div class="welcome-screen">
@@ -3300,26 +3297,13 @@ function renderWelcomeScreen(storedHandle, recentFolders) {
       </div>
       <div class="welcome-title">VS Code Online</div>
       <div class="welcome-subtitle">Open a folder to start coding</div>
-
-      <button class="welcome-open-btn" onclick="openFolder()">
+      ${reconnectBtn}
+      <button class="welcome-open-btn ${reconnectBtn ? 'open-folder-btn-secondary' : ''}" onclick="openFolder()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
         </svg>
-        Open Folder...
+        Open Folder…
       </button>
-
-      ${recentFolders.length > 0 ? `
-        <div class="welcome-section-label">RECENT</div>
-        <div class="welcome-recent-list">${recentItems}</div>
-      ` : ''}
-
-      <div class="welcome-section-label" style="margin-top:20px">SHORTCUTS</div>
-      <div class="welcome-shortcuts">
-        <div class="welcome-shortcut"><kbd>Ctrl+P</kbd><span>Go to file</span></div>
-        <div class="welcome-shortcut"><kbd>Ctrl+Shift+P</kbd><span>Command palette</span></div>
-        <div class="welcome-shortcut"><kbd>Ctrl+K T</kbd><span>Change theme</span></div>
-        <div class="welcome-shortcut"><kbd>Shift+Alt+F</kbd><span>Format document</span></div>
-      </div>
     </div>
     <div id="tree-root"></div>
   `;
