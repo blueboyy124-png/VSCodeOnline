@@ -1702,29 +1702,30 @@ require(['vs/editor/editor.main'], function () {
     { label: 'root', detail: ':root variables', insert: ':root {\n\t--${1:name}: ${2:value};\n}' },
   ];
 
-  function mkKind(k) { return monaco.languages.CompletionItemKind[k]; }
+  // Use direct property access — string indexing of const enums doesn't work in Monaco's bundle
+  const CIK = monaco.languages.CompletionItemKind;
+  const CIR = monaco.languages.CompletionItemInsertTextRule;
 
   function registerCompletions(langs, snippets, keywords, globals) {
     langs.forEach(lang => {
       monaco.languages.registerCompletionItemProvider(lang, {
-        triggerCharacters: ['.', '"', "'", '`', '/', '@', '<'],
+        // No triggerCharacters — let Monaco call us on every keystroke (word chars trigger automatically)
         provideCompletionItems(model, position) {
           const word = model.getWordUntilPosition(position);
-          const range = {
-            startLineNumber: position.lineNumber,
-            endLineNumber: position.lineNumber,
-            startColumn: word.startColumn,
-            endColumn: word.endColumn,
-          };
+          const range = new monaco.Range(
+            position.lineNumber,
+            word.startColumn,
+            position.lineNumber,
+            word.endColumn
+          );
 
           const suggestions = [];
 
-          // Keywords
           if (keywords) {
             keywords.forEach(kw => {
               suggestions.push({
                 label: kw,
-                kind: mkKind('Keyword'),
+                kind: CIK.Keyword,
                 insertText: kw,
                 range,
                 sortText: '0' + kw,
@@ -1732,42 +1733,41 @@ require(['vs/editor/editor.main'], function () {
             });
           }
 
-          // Globals / builtins
           if (globals) {
             globals.forEach(g => {
               suggestions.push({
                 label: g,
-                kind: mkKind('Variable'),
+                kind: CIK.Variable,
                 insertText: g,
-                range,
                 detail: 'Built-in',
+                range,
                 sortText: '1' + g,
               });
             });
           }
 
-          // Snippets
           if (snippets) {
             snippets.forEach(s => {
               suggestions.push({
                 label: s.label,
-                kind: mkKind('Snippet'),
+                kind: CIK.Snippet,
                 insertText: s.insert,
-                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                insertTextRules: CIR.InsertAsSnippet,
                 detail: s.detail,
+                documentation: s.detail,
                 range,
                 sortText: '2' + s.label,
               });
             });
           }
 
-          return { suggestions };
+          return { suggestions, incomplete: false };
         }
       });
     });
   }
 
-  // Register for all the common languages
+  // Register for all common languages
   registerCompletions(['javascript', 'typescript', 'javascriptreact', 'typescriptreact'],
     JS_SNIPPETS, JS_KEYWORDS, JS_GLOBALS);
   registerCompletions(['html'], HTML_SNIPPETS, null, null);
@@ -1780,14 +1780,13 @@ require(['vs/editor/editor.main'], function () {
     automaticLayout: true,
     minimap: { enabled: true },
     contextmenu: false,
-    quickSuggestions:           { other: true, comments: true, strings: true },
+    quickSuggestions:           true,    // true = show suggestions as you type for all contexts
     suggestOnTriggerCharacters: true,
-    wordBasedSuggestions:       'allDocuments',
-    snippetSuggestions:         'inline',
+    wordBasedSuggestions:       true,    // 'allDocuments' string form not available in 0.44
+    snippetSuggestions:         'top',   // show snippets at top of list
     parameterHints:             { enabled: true },
     acceptSuggestionOnEnter:    'on',
     tabCompletion:              'on',
-    inlineSuggest:              { enabled: true },
     suggest: {
       showWords:        true,
       showSnippets:     true,
@@ -1796,11 +1795,6 @@ require(['vs/editor/editor.main'], function () {
       showClasses:      true,
       showVariables:    true,
       showProperties:   true,
-      showModules:      true,
-      showReferences:   true,
-      showConstructors: true,
-      showInterfaces:   true,
-      showEnums:        true,
       filterGraceful:   true,
       localityBonus:    true,
       insertMode:       'replace',
