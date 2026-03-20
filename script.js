@@ -1563,22 +1563,13 @@ function getFolderIcon(name, isOpen = false) {
 //   • Sync XHR inside a worker is deprecated and blocked in strict mode
 //
 // ── Monaco setup ─────────────────────────────────────────────────────────────
-// Workers (ts.worker, editor.worker etc.) are blocked by COEP headers on this
-// deployment. Instead of trying to load them, we skip workers entirely and
-// register our own completion providers so suggestions work perfectly.
+// Language workers (ts.worker etc.) are blocked by COEP on this deployment.
+// We do NOT provide a fake MonacoEnvironment — giving Monaco an empty blob
+// Worker causes it to stall waiting for responses, blocking all completions.
+// Instead we let Monaco handle workers on its own (it gracefully degrades)
+// and register our own completion providers which work independently.
 
 const _MONACO_CDN = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs';
-
-// Tell Monaco not to use any workers — use synchronous fallbacks instead.
-// This prevents the 404 errors and lets us control completions ourselves.
-window.MonacoEnvironment = {
-  getWorker: function(_moduleId, _label) {
-    // Return a no-op worker blob — Monaco will fall back to sync mode
-    return new Worker(URL.createObjectURL(
-      new Blob([''], { type: 'application/javascript' })
-    ));
-  }
-};
 
 require.config({ paths: { vs: _MONACO_CDN } });
 require(['vs/editor/editor.main'], function () {
@@ -1712,12 +1703,12 @@ require(['vs/editor/editor.main'], function () {
         // No triggerCharacters — let Monaco call us on every keystroke (word chars trigger automatically)
         provideCompletionItems(model, position) {
           const word = model.getWordUntilPosition(position);
-          const range = new monaco.Range(
-            position.lineNumber,
-            word.startColumn,
-            position.lineNumber,
-            word.endColumn
-          );
+          const range = {
+            startLineNumber: position.lineNumber,
+            endLineNumber:   position.lineNumber,
+            startColumn:     word.startColumn,
+            endColumn:       word.endColumn,
+          };
 
           const suggestions = [];
 
@@ -1768,10 +1759,14 @@ require(['vs/editor/editor.main'], function () {
   }
 
   // Register for all common languages
-  registerCompletions(['javascript', 'typescript', 'javascriptreact', 'typescriptreact'],
-    JS_SNIPPETS, JS_KEYWORDS, JS_GLOBALS);
-  registerCompletions(['html'], HTML_SNIPPETS, null, null);
-  registerCompletions(['css', 'scss', 'less'], CSS_SNIPPETS, null, null);
+  // Small delay ensures Monaco's own language features are registered first
+  // so our providers layer on top rather than conflicting
+  setTimeout(() => {
+    registerCompletions(['javascript', 'typescript', 'javascriptreact', 'typescriptreact'],
+      JS_SNIPPETS, JS_KEYWORDS, JS_GLOBALS);
+    registerCompletions(['html'], HTML_SNIPPETS, null, null);
+    registerCompletions(['css', 'scss', 'less'], CSS_SNIPPETS, null, null);
+  }, 200);
 
   // ── Editor instances ─────────────────────────────────────────────────────
   const commonConfig = {
