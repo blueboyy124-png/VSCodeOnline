@@ -665,6 +665,7 @@ async function deleteProject(projectId) {
 
 // ── Navigation ───────────────────────────────────────────
 function openLocalFolder() { sessionStorage.setItem('openFolderOnLoad','1'); window.location.href='index.html'; }
+function openEditor() { window.location.href='index.html'; }
 function joinSession() {
   const val=document.getElementById('join-inp').value.trim();
   if (!val) { document.getElementById('join-inp').focus(); return; }
@@ -682,7 +683,7 @@ function setupContextMenu() {
     if (e.defaultPrevented) return;
     e.preventDefault();
     showCtx(e, [
-      {label:'Open Editor', action:()=>window.location.href='index.html'},
+      {label:'Open Editor', action:()=>openEditor()},
       {label:'Open Folder', action:()=>openLocalFolder()},
       {divider:true},
       {label:'Reload page', action:()=>location.reload()},

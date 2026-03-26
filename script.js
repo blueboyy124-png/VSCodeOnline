@@ -633,12 +633,15 @@ function fileMenuCloseFolder() {
   cachedWorkspaceFiles = [];
   currentFile1 = null; currentFile2 = null;
   webcontainerInstance = null; // clear so next openFolder() boots fresh
+  // Remove stored workspace handle so "Reopen" doesn't reappear for this folder
+  idbKeyval.delete('workspaceHandle').catch(() => {});
+  localStorage.removeItem('workspaceSession');
 
   const _sbClose = document.getElementById('search-bar-text');
   if (_sbClose) _sbClose.textContent = 'workspace';
   isProgrammaticEdit = true;
-  editor1.setValue('// Open a folder to start');
-  editor2.setValue('');
+  if (editor1) editor1.setValue('');
+  if (editor2) editor2.setValue('');
   isProgrammaticEdit = false;
 
   // Make sure editor panes are visible again
@@ -648,10 +651,11 @@ function fileMenuCloseFolder() {
   activeEditor = editor1;
 
   renderTabs();
-  const treeRoot = document.getElementById('tree-root');
-  if (treeRoot) treeRoot.innerHTML = '';
-  const fileTree = document.getElementById('fileTree');
-  fileTree.innerHTML = '<button class="open-folder-btn" onclick="openFolder()">Open Folder</button>';
+  // Restore the full welcome screen (not just a bare button)
+  const _rfRecent = JSON.parse(localStorage.getItem('recentFolders') || '[]');
+  idbKeyval.get('workspaceHandle').then(handle => {
+    renderWelcomeScreen(handle, _rfRecent);
+  }).catch(() => renderWelcomeScreen(null, _rfRecent));
   printToOutput('Folder closed.', '#858585');
 }
 
@@ -1876,6 +1880,18 @@ async function openFolder() {
     currentFile1 = null; currentFile2 = null;
     if (editor1) { isProgrammaticEdit = true; editor1.setValue(''); isProgrammaticEdit = false; }
     if (editor2) { isProgrammaticEdit = true; editor2.setValue(''); isProgrammaticEdit = false; }
+    // Make sure editor pane is visible (may have been hidden by preview or split)
+    const _ofEd1 = document.getElementById('editor1');
+    if (_ofEd1) _ofEd1.style.display = '';
+    const _ofEd2 = document.getElementById('editor2');
+    if (_ofEd2) { _ofEd2.style.display = 'none'; delete _ofEd2.dataset.wasVisible; }
+    activeEditor = editor1;
+    // Hide any active preview
+    const _ofPp = document.getElementById('preview-pane');
+    if (_ofPp) _ofPp.style.display = 'none';
+    previewMode = null; _previewTabActive = false; _previewSourceFile = null;
+    renderTabs();
+
     const _sb1 = document.getElementById('search-bar-text'); if(_sb1) _sb1.textContent = projectFolder.name;
     
     // 1. Grab your main tree container
@@ -1906,7 +1922,7 @@ async function openFolder() {
       localStorage.setItem('recentFolders', JSON.stringify(_recentF.slice(0, 10)));
     }
     saveWorkspaceState();
-    startWebContainer()
+    startWebContainer();
     
   } catch (err) {
     if (err.name === 'AbortError') {
@@ -3240,7 +3256,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   const openFolderFlag = sessionStorage.getItem('openFolderOnLoad');
   if (openFolderFlag) {
     sessionStorage.removeItem('openFolderOnLoad');
-    setTimeout(() => { if (typeof openFolder === 'function') openFolder(); }, 400);
+    // IMPORTANT: showDirectoryPicker() requires a *direct* user gesture (a click).
+    // Calling it inside setTimeout breaks the gesture chain and throws:
+    //   "Must be handling a user gesture to show a file picker."
+    // Instead we show a prompt overlay — the user clicks its button, which IS the gesture.
+    setTimeout(() => _showOpenFolderPrompt(), 300);
   }
   const openCloud = sessionStorage.getItem('openCloudOnLoad');
   if (openCloud) {
@@ -3288,6 +3308,18 @@ function renderWelcomeScreen(storedHandle, recentFolders) {
         Reopen "${storedHandle.name}"
       </button>` : '';
 
+  const recentHtml = (recentFolders && recentFolders.length > 0)
+    ? `<div style="margin-top:14px;width:100%;text-align:left">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;padding-left:2px">Recent</div>
+        ${recentFolders.slice(0, 5).map(name => `
+          <div style="display:flex;align-items:center;gap:7px;padding:5px 6px;border-radius:6px;cursor:default;color:var(--text-muted);font-size:11px;overflow:hidden">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</span>
+          </div>`).join('')}
+      </div>` : '';
+
   tree.innerHTML = `
     <div class="welcome-screen">
       <div class="welcome-logo">
@@ -3304,10 +3336,102 @@ function renderWelcomeScreen(storedHandle, recentFolders) {
         </svg>
         Open Folder…
       </button>
+      <button class="welcome-open-btn" style="opacity:.55;font-size:11px;padding:5px 10px;margin-top:4px" onclick="_dismissWelcomeScreen()">
+        Use Editor Without Project
+      </button>
+      ${recentHtml}
     </div>
     <div id="tree-root"></div>
   `;
 }
+
+/* Let the user code without a project — clears the welcome screen */
+function _dismissWelcomeScreen() {
+  const tree = document.getElementById('fileTree');
+  if (tree) tree.innerHTML = '<div id="tree-root"></div>';
+  if (editor1) {
+    isProgrammaticEdit = true;
+    editor1.setValue('// Start coding here…\n');
+    isProgrammaticEdit = false;
+    activeEditor = editor1;
+    if (editor1.getModel()) {
+      monaco.editor.setModelLanguage(editor1.getModel(), 'javascript');
+      document.getElementById('status-lang').innerText = 'Javascript';
+    }
+    setTimeout(() => editor1.focus(), 50);
+  }
+}
+window._dismissWelcomeScreen = _dismissWelcomeScreen;
+
+/* ── _showOpenFolderPrompt ─────────────────────────────────────────────────
+   When home.html navigates here via openFolderOnLoad, showDirectoryPicker()
+   CANNOT be called from a setTimeout — that breaks the user-gesture chain.
+   This overlay gives the user a button that IS the required gesture. */
+function _showOpenFolderPrompt() {
+  const existing = document.getElementById('open-folder-prompt');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'open-folder-prompt';
+  overlay.style.cssText = [
+    'position:fixed','inset:0','z-index:99999',
+    'background:rgba(0,0,0,.6)','backdrop-filter:blur(6px)',
+    'display:flex','align-items:center','justify-content:center',
+  ].join(';');
+
+  overlay.innerHTML = `
+    <div style="
+      background:var(--bg-editor,#1e1e1e);
+      border:1px solid var(--border-light,#333);
+      border-radius:16px;padding:32px 36px;
+      text-align:center;max-width:360px;width:90%;
+      box-shadow:0 24px 80px rgba(0,0,0,.65);
+    ">
+      <div style="font-size:30px;margin-bottom:14px">📂</div>
+      <div style="font-size:16px;font-weight:700;color:var(--text-bright,#fff);margin-bottom:8px;letter-spacing:-.015em">
+        Open Your Project Folder
+      </div>
+      <div style="font-size:12px;color:var(--text-muted,#888);margin-bottom:24px;line-height:1.65">
+        Your browser requires a direct click to grant folder access.<br>
+        Click the button below to choose your project.
+      </div>
+      <button id="ofp-open-btn" style="
+        display:block;width:100%;
+        background:var(--accent,#7c6af7);color:#fff;border:none;
+        border-radius:10px;padding:11px 0;font-size:13px;font-weight:600;
+        font-family:inherit;cursor:pointer;margin-bottom:10px;
+        transition:opacity 150ms;
+      ">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             style="vertical-align:middle;margin-right:6px;margin-top:-2px">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        Open Folder…
+      </button>
+      <button id="ofp-skip-btn" style="
+        display:block;width:100%;
+        background:none;color:var(--text-muted,#888);
+        border:1px solid var(--border,#2a2a38);
+        border-radius:10px;padding:9px 0;font-size:12px;
+        font-family:inherit;cursor:pointer;transition:border-color 150ms;
+      ">
+        Use Editor Without a Project
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  document.getElementById('ofp-open-btn').addEventListener('click', () => {
+    overlay.remove();
+    openFolder(); // direct click = valid user gesture ✓
+  });
+  document.getElementById('ofp-skip-btn').addEventListener('click', () => {
+    overlay.remove();
+    _dismissWelcomeScreen();
+  });
+}
+window._showOpenFolderPrompt = _showOpenFolderPrompt;
 
 /* =========================================
    THEME SYSTEM
@@ -4809,6 +4933,21 @@ async function startWebContainer() {
       shellWriter = null;
     }
     shellWriter = shellProcess.input.getWriter();
+
+    // Auto-open the terminal panel so the user can see it
+    window.openTerminal();
+    switchTerminalTab('terminal');
+    setTimeout(() => { try { fitAddon.fit(); } catch {} }, 80);
+
+    // Send the project directory as the initial working directory.
+    // jsh already starts with cwd set, but we send an explicit `cd` so the
+    // prompt and pwd both reflect the project root, and so shell history
+    // (e.g. via Up-arrow) starts from the right place.
+    if (projectFolder) {
+      setTimeout(() => {
+        try { shellWriter.write(`cd "/${projectFolder.name}"\r`); } catch {}
+      }, 600); // wait for jsh to finish its startup banner
+    }
 
     // After jsh is ready, scan for sub-projects that need npm install
     // and print the exact commands to run — never auto-run them
